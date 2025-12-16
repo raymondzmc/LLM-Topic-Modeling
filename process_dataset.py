@@ -23,7 +23,7 @@ from data.processing_utils import get_device_info, collate_fn, extract_embedding
 
 def main(args):
     """Main processing function."""
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -84,6 +84,8 @@ def main(args):
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
         torch_dtype=torch.bfloat16,
+        trust_remote_code=True,
+        attn_implementation="flash_attention_2",
     ).eval()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
