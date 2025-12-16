@@ -136,9 +136,9 @@ def extract_embeddings(
             mask = attention_mask[batch_idx].unsqueeze(-1)
             hidden = hidden_states[hidden_state_layer][batch_idx]
             embeddings = (hidden * mask).sum(dim=0) / mask.sum()
-            return embeddings.cpu().tolist()
+            return embeddings.float().cpu().tolist()
         elif embedding_method == 'last':
-            return hidden_states[hidden_state_layer][batch_idx, -1].cpu().tolist()
+            return hidden_states[hidden_state_layer][batch_idx, -1].float().cpu().tolist()
         else:
             raise ValueError(f"Unsupported embedding method: {embedding_method}")
     else:
@@ -149,10 +149,10 @@ def extract_embeddings(
             for h in hidden_states:
                 hidden = h[batch_idx]
                 layer_emb = (hidden * mask).sum(dim=0) / mask.sum()
-                embeddings.append(layer_emb.cpu().tolist())
+                embeddings.append(layer_emb.float().cpu().tolist())
             return embeddings
         elif embedding_method == 'last':
-            return [h[batch_idx, -1].cpu().tolist() for h in hidden_states]
+            return [h[batch_idx, -1].float().cpu().tolist() for h in hidden_states]
         else:
             raise ValueError(f"Unsupported embedding method: {embedding_method}")
 

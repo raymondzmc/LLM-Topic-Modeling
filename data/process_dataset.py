@@ -7,16 +7,16 @@ import time
 from collections import Counter
 from datetime import datetime
 
+import numpy as np
 import torch
 from tqdm import tqdm
-from datasets import Dataset, load_from_disk
+from datasets import Dataset, load_from_disk, Features, Value, Sequence
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from llm import compute_word_log_prob
-from settings import settings
 
-from data.loaders import get_hf_dataset, get_local_dataset, save_processed_dataset, PROCESSED_DATA_DIR
+from data.loaders import get_hf_dataset, get_local_dataset, save_and_upload_dataset, PROCESSED_DATA_DIR
 from data.tokenization import tokenize_dataset_batch
 from data.processing_utils import get_device_info, collate_fn, extract_embeddings
 
@@ -52,12 +52,7 @@ def main(args):
             dataset = get_local_dataset(args.dataset)
         else:
             dataset = get_hf_dataset(args.dataset, args.split)
-        
-        # Apply subset if specified (before tokenization for efficiency)
-        if args.subset is not None:
-            dataset = dataset.select(range(min(args.subset, len(dataset))))
-            print(f"Using subset of {len(dataset)} examples")
-        
+
         # Tokenize dataset
         dataset = dataset.map(
             lambda x: tokenize_dataset_batch(
@@ -175,54 +170,55 @@ def main(args):
                 args.embedding_method
             )
             
-            # Compute next word probs for words in the vocab
+            # Compute next word logits for words in the vocab
             if args.single_token_only and len(single_token_word_idx) == len(vocab):
                 vocab_logits = example_next_token_logits[0, vocab_token_prefix]
-                all_probs = {vocab[i]: vocab_logits[i].item() for i in range(len(vocab))}
-                next_word_probs = [all_probs[word] for word in vocab]
+                all_logits = {vocab[i]: vocab_logits[i].item() for i in range(len(vocab))}
+                next_word_logits = [all_logits[word] for word in vocab]
             else:
-                if args.temperature is not None:
-                    next_token_probs = torch.softmax(example_next_token_logits / args.temperature, dim=-1).squeeze(0)
-                else:
-                    next_token_probs = torch.softmax(example_next_token_logits, dim=-1).squeeze(0)
-                
-                single_token_probs = {}
+                # Extract logits for single-token words
+                single_token_logits = {}
                 for i in single_token_word_idx:
-                    single_token_probs[vocab[i]] = next_token_probs[vocab_token_prefix[i]].item()
+                    single_token_logits[vocab[i]] = example_next_token_logits[0, vocab_token_prefix[i]].item()
 
-                multi_token_probs = {}
+                # Compute logits for multi-token words
+                multi_token_logits = {}
                 if not args.single_token_only and len(multi_token_word_idx) > 0:
                     context_input_ids = input_ids[b_idx:b_idx+1]
                     context_length = attention_mask[b_idx].sum().item()
                     
                     if args.word_prob_method == 'product':
-                        multi_token_probs = compute_word_log_prob(
+                        # compute_word_log_prob returns log probabilities
+                        multi_token_logits = compute_word_log_prob(
                             model, tokenizer, device, multi_token_word_idx, context_input_ids,
                             vocab_token_ids, vocab, min(args.batch_size, 32), context_length)
                     elif args.word_prob_method == 'prefix':
+                        # For prefix method, use first token logit and split equally among words
                         prefix_groups = {}
                         for i in multi_token_word_idx:
                             prefix = vocab_token_prefix[i]
                             prefix_groups.setdefault(prefix, []).append(i)
 
                         for prefix, indices in prefix_groups.items():
-                            total_prefix_prob = next_token_probs[prefix].item()
-                            split_prob = total_prefix_prob / len(indices)
+                            prefix_logit = example_next_token_logits[0, prefix].item()
+                            # Split logit equally (in log space, this is approximate)
+                            split_logit = prefix_logit - torch.log(torch.tensor(len(indices))).item()
                             for i in indices:
-                                multi_token_probs[vocab[i]] = split_prob
+                                multi_token_logits[vocab[i]] = split_logit
                     else:
                         raise ValueError(f"Invalid word probability method: {args.word_prob_method}")
 
-                all_probs = {**single_token_probs, **multi_token_probs}
-                total_prob = sum(all_probs.values())
-                normalized_next_word_probs = {word: prob / total_prob for word, prob in all_probs.items()}
-                next_word_probs = [normalized_next_word_probs[word] for word in vocab]
+                all_logits = {**single_token_logits, **multi_token_logits}
+                next_word_logits = [all_logits[word] for word in vocab]
+            
+            # Convert logits to float32 to save storage space
+            next_word_logits = np.array(next_word_logits, dtype=np.float32).tolist()
 
             processed_example = {
                 'id': example_id,
                 'context': context,
                 'next_word': next_words[b_idx],
-                'next_word_probs': next_word_probs,
+                'next_word_logits': next_word_logits,
                 'input_embeddings': embeddings,
                 'bow': example_bow,
             }
@@ -261,53 +257,41 @@ def main(args):
         "vocab_size": len(vocab),
     }
     
-    # Create dataset
-    processed_dataset = Dataset.from_dict(dataset_dict)
+    # Define features with explicit float32 dtypes for embeddings and logits
+    features = Features({
+        'id': Value('int64') if 'id' in dataset_dict else Value('string'),
+        'context': Value('string'),
+        'next_word': Value('string'),
+        'next_word_logits': Sequence(Value('float32')),
+        'input_embeddings': Sequence(Sequence(Value('float32'))),
+        'bow': Value('string'),
+    })
+    
+    # Add label if it exists (can be string or int)
+    if 'label' in dataset_dict:
+        first_label = dataset_dict['label'][0]
+        if isinstance(first_label, str):
+            features['label'] = Value('string')
+        else:
+            features['label'] = Value('int64')
+    
+    # Create dataset with explicit features
+    processed_dataset = Dataset.from_dict(dataset_dict, features=features)
     processed_dataset.info.description = f"Processed topic modeling dataset from {args.dataset}"
     processed_dataset.info.dataset_name = args.save_name
     
     print(f"Dataset created with {len(processed_dataset)} examples")
     print(f"Dataset features: {processed_dataset.features}")
     
-    # Save locally to processed_data/ directory
-    local_save_path = save_processed_dataset(
+    # Save locally and optionally upload to HuggingFace Hub
+    save_and_upload_dataset(
         processed_dataset,
         vocab,
         metadata,
-        args.save_name
+        args.save_name,
+        hf_repo_name=args.hf_repo_name,
+        private=args.hf_private
     )
-    
-    # Upload to HuggingFace Hub
-    if args.hf_repo_name:
-        from huggingface_hub import HfApi
-        
-        print(f"\nUploading dataset to HuggingFace Hub: {args.hf_repo_name}")
-        
-        processed_dataset.push_to_hub(
-            args.hf_repo_name,
-            private=args.hf_private,
-        )
-        
-        vocab_save_path = os.path.join(local_save_path, "vocab.json")
-        metadata_save_path = os.path.join(local_save_path, "metadata.json")
-        
-        api = HfApi()
-        api.upload_file(
-            path_or_fileobj=vocab_save_path,
-            path_in_repo="vocab.json",
-            repo_id=args.hf_repo_name,
-            repo_type="dataset",
-        )
-        api.upload_file(
-            path_or_fileobj=metadata_save_path,
-            path_in_repo="metadata.json",
-            repo_id=args.hf_repo_name,
-            repo_type="dataset",
-        )
-        
-        print(f"Dataset uploaded successfully to: https://huggingface.co/datasets/{args.hf_repo_name}")
-        print(f"  - vocab.json: {len(vocab)} words")
-        print(f"  - metadata.json: processing info and arguments")
 
 
 if __name__ == '__main__':
@@ -328,8 +312,6 @@ if __name__ == '__main__':
     parser.add_argument('--embedding_method', type=str, default='last', choices=['mean', 'last'])
     parser.add_argument('--save_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--subset', type=int, default=None)
-    parser.add_argument('--temperature', type=float, default=None)
     parser.add_argument('--hf_repo_name', type=str, default=None)
     parser.add_argument('--hf_private', action='store_true')
     args = parser.parse_args()
@@ -338,8 +320,7 @@ if __name__ == '__main__':
 
     if args.save_name is None:
         args.save_name = f"{os.path.basename(args.dataset).split('.')[0]}_{os.path.basename(args.model_name)}_vocab_{args.vocab_size}_{args.embedding_method}"
-        if args.subset is not None:
-            args.save_name += f"_subset_{args.subset}"
+
 
     print(f'Processing dataset "{args.dataset}" with save name "{args.save_name}"')
     
