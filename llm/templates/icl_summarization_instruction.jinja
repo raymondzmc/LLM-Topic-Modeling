@@ -1,0 +1,17 @@
+{% for example in examples %}
+### Example {{ loop.index }}
+
+Document:
+{{ example.document }}
+
+Here is the summary:
+{{ example.summary }}
+
+{% endfor %}
+
+### Example {{ loop.index + 1 }}
+
+Document:
+{{ target_document }}
+
+Here is the summary:

@@ -1,0 +1,51 @@
+{% for example in examples %}
+# Example {{ loop.index }}
+
+## Document:
+{{ example.document }}
+
+Classify the document into one of the following categories by outputting the name ONLY:
+
+- Company
+- EducationalInstitution
+- Artist
+- Athlete
+- OfficeHolder
+- MeanOfTransportation
+- Building
+- NaturalPlace
+- Village
+- Animal
+- Plant
+- Album
+- Film
+- WrittenWork
+
+## Category:
+{{ example.target }}
+
+{% endfor %}
+
+# Example {{ examples|length + 1 }}
+
+## Document:
+{{ target_document }}
+
+Classify the document into one of the following categories by outputting the name ONLY:
+
+- Company
+- EducationalInstitution
+- Artist
+- Athlete
+- OfficeHolder
+- MeanOfTransportation
+- Building
+- NaturalPlace
+- Village
+- Animal
+- Plant
+- Album
+- Film
+- WrittenWork
+
+## Category:
