@@ -8,6 +8,7 @@ from wandb import login as wandb_login
 class Settings(BaseSettings):
     openai_api_key: str = Field(...)
     hf_token: str = Field(...)
+    hf_username: str = Field(...)
     wandb_api_key: str = Field(...)
     wandb_entity: str = Field(...)
 

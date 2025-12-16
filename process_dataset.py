@@ -314,7 +314,6 @@ if __name__ == '__main__':
     parser.add_argument('--embedding_method', type=str, default='last', choices=['mean', 'last'])
     parser.add_argument('--save_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--hf_repo_name', type=str, default=None)
     parser.add_argument('--hf_private', action='store_true')
     args = parser.parse_args()
     
@@ -323,6 +322,7 @@ if __name__ == '__main__':
     if args.save_name is None:
         args.save_name = f"{os.path.basename(args.dataset).split('.')[0]}_{os.path.basename(args.model_name)}_vocab_{args.vocab_size}_{args.embedding_method}"
 
+    args.hf_repo_name = f"{settings.hf_username}/{args.save_name}"
 
     print(f'Processing dataset "{args.dataset}" with save name "{args.save_name}"')
     
