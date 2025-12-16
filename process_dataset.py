@@ -19,7 +19,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 from data.loaders import get_hf_dataset, get_local_dataset, save_and_upload_dataset, PROCESSED_DATA_DIR
 from data.tokenization import tokenize_dataset_batch
 from data.processing_utils import get_device_info, collate_fn, extract_embeddings
-
+from settings import settings
 
 def main(args):
     """Main processing function."""
@@ -83,7 +83,7 @@ def main(args):
     # Load model
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         trust_remote_code=True,
         attn_implementation="flash_attention_2",
     ).eval()
