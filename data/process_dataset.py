@@ -171,45 +171,45 @@ def main(args):
             )
             
             # Compute next word logits for words in the vocab
-            if args.single_token_only and len(single_token_word_idx) == len(vocab):
-                vocab_logits = example_next_token_logits[0, vocab_token_prefix]
-                all_logits = {vocab[i]: vocab_logits[i].item() for i in range(len(vocab))}
-                next_word_logits = [all_logits[word] for word in vocab]
-            else:
+            # if args.single_token_only and len(single_token_word_idx) == len(vocab):
+            vocab_logits = example_next_token_logits[0, vocab_token_prefix]
+            all_logits = {vocab[i]: vocab_logits[i].item() for i in range(len(vocab))}
+            next_word_logits = [all_logits[word] for word in vocab]
+            # else:
                 # Extract logits for single-token words
-                single_token_logits = {}
-                for i in single_token_word_idx:
-                    single_token_logits[vocab[i]] = example_next_token_logits[0, vocab_token_prefix[i]].item()
+                # single_token_logits = {}
+                # for i in single_token_word_idx:
+                #     single_token_logits[vocab[i]] = example_next_token_logits[0, vocab_token_prefix[i]].item()
 
                 # Compute logits for multi-token words
-                multi_token_logits = {}
-                if not args.single_token_only and len(multi_token_word_idx) > 0:
-                    context_input_ids = input_ids[b_idx:b_idx+1]
-                    context_length = attention_mask[b_idx].sum().item()
+                # multi_token_logits = {}
+                # if not args.single_token_only and len(multi_token_word_idx) > 0:
+                #     context_input_ids = input_ids[b_idx:b_idx+1]
+                #     context_length = attention_mask[b_idx].sum().item()
                     
-                    if args.word_prob_method == 'product':
-                        # compute_word_log_prob returns log probabilities
-                        multi_token_logits = compute_word_log_prob(
-                            model, tokenizer, device, multi_token_word_idx, context_input_ids,
-                            vocab_token_ids, vocab, min(args.batch_size, 32), context_length)
-                    elif args.word_prob_method == 'prefix':
-                        # For prefix method, use first token logit and split equally among words
-                        prefix_groups = {}
-                        for i in multi_token_word_idx:
-                            prefix = vocab_token_prefix[i]
-                            prefix_groups.setdefault(prefix, []).append(i)
+                #     if args.word_prob_method == 'product':
+                #         # compute_word_log_prob returns log probabilities
+                #         multi_token_logits = compute_word_log_prob(
+                #             model, tokenizer, device, multi_token_word_idx, context_input_ids,
+                #             vocab_token_ids, vocab, min(args.batch_size, 32), context_length)
+                #     elif args.word_prob_method == 'prefix':
+                #         # For prefix method, use first token logit and split equally among words
+                #         prefix_groups = {}
+                #         for i in multi_token_word_idx:
+                #             prefix = vocab_token_prefix[i]
+                #             prefix_groups.setdefault(prefix, []).append(i)
 
-                        for prefix, indices in prefix_groups.items():
-                            prefix_logit = example_next_token_logits[0, prefix].item()
-                            # Split logit equally (in log space, this is approximate)
-                            split_logit = prefix_logit - torch.log(torch.tensor(len(indices))).item()
-                            for i in indices:
-                                multi_token_logits[vocab[i]] = split_logit
-                    else:
-                        raise ValueError(f"Invalid word probability method: {args.word_prob_method}")
+                #         for prefix, indices in prefix_groups.items():
+                #             prefix_logit = example_next_token_logits[0, prefix].item()
+                #             # Split logit equally (in log space, this is approximate)
+                #             split_logit = prefix_logit - torch.log(torch.tensor(len(indices))).item()
+                #             for i in indices:
+                #                 multi_token_logits[vocab[i]] = split_logit
+                #     else:
+                #         raise ValueError(f"Invalid word probability method: {args.word_prob_method}")
 
-                all_logits = {**single_token_logits, **multi_token_logits}
-                next_word_logits = [all_logits[word] for word in vocab]
+                # all_logits = {**single_token_logits, **multi_token_logits}
+                # next_word_logits = [all_logits[word] for word in vocab]
             
             # Convert logits to float32 to save storage space
             next_word_logits = np.array(next_word_logits, dtype=np.float32).tolist()

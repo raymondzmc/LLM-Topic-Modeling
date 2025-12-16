@@ -8,7 +8,7 @@ python data/process_dataset.py \
     --label_key label \
     --vocab_size 2000 \
     --model_name baidu/ERNIE-4.5-0.3B-PT \
-    --batch_size 32 \
+    --batch_size 64 \
     --embedding_method last \
     --save_name tweet_topic_ERNIE-4.5-0.3B-PT_vocab_2000_last
 
