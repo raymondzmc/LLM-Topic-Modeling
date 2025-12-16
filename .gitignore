@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data directories (large files, downloaded from HF)
+data/processed_data/
+data/.cache/
+
+# Model files
+*.pt
+*.pth
+*.bin
+*.safetensors
+word2vec-google-news-300.kv
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Results (can be regenerated)
+results/
+
+# OS
+.DS_Store
+Thumbs.db
+
