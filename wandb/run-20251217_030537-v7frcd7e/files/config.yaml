@@ -1,0 +1,106 @@
+_wandb:
+    value:
+        cli_version: 0.23.1
+        e:
+            5jqfzr8lqaajwvtp06ef8c56mp6qlgee:
+                apple:
+                    ecpuCores: 2
+                    gpuCores: 32
+                    memoryGb: 64
+                    name: Apple M1 Max
+                    pcpuCores: 8
+                    ramTotalBytes: "68719476736"
+                    swapTotalBytes: "4294967296"
+                args:
+                    - --data_path
+                    - raymondzmc/tweet_topic_ERNIE-4.5-0.3B-PT_vocab_2000_last
+                    - --model
+                    - zeroshot
+                    - --num_topics
+                    - "10"
+                    - --num_seeds
+                    - "1"
+                    - --num_epochs
+                    - "10"
+                    - --top_words
+                    - "10"
+                codePath: run_topic_model.py
+                codePathLocal: run_topic_model.py
+                cpu_count: 10
+                cpu_count_logical: 10
+                disk:
+                    /:
+                        total: "3996329328640"
+                        used: "1305346781184"
+                email: li.raymond96@gmail.com
+                executable: /Users/raymond/opt/miniconda3/envs/llm-topics/bin/python
+                git:
+                    commit: 72aac599eb47be700ad9c1e412ce5d3e546a6554
+                    remote: git@github.com:raymondzmc/LLM-Topic-Modeling.git
+                host: RaymondtekiMacBook-Pro.local
+                memory:
+                    total: "68719476736"
+                os: macOS-15.5-arm64-arm-64bit
+                program: /Users/raymond/Research/LLM-Topic-Modeling/run_topic_model.py
+                python: CPython 3.12.11
+                root: /Users/raymond/Research/LLM-Topic-Modeling
+                startedAt: "2025-12-16T19:05:37.903316Z"
+                writerId: 5jqfzr8lqaajwvtp06ef8c56mp6qlgee
+        m: []
+        python_version: 3.12.11
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 33
+                - 41
+                - 49
+                - 51
+                - 53
+                - 75
+                - 95
+            "2":
+                - 1
+                - 5
+                - 11
+                - 33
+                - 41
+                - 49
+                - 51
+                - 53
+                - 75
+                - 95
+            "3":
+                - 2
+                - 13
+                - 16
+            "4": 3.12.11
+            "5": 0.23.1
+            "6": 4.57.3
+            "12": 0.23.1
+            "13": darwin-arm64
+activation:
+    value: softplus
+batch_size:
+    value: 64
+dataset:
+    value: tweet
+hidden_size:
+    value: 200
+lr:
+    value: 0.002
+model:
+    value: zeroshot
+num_epochs:
+    value: 10
+num_hidden_layers:
+    value: 2
+num_seeds:
+    value: 1
+num_topics:
+    value: 10
+solver:
+    value: adam
+top_words:
+    value: 10

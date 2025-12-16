@@ -10,6 +10,9 @@ from data.loaders import (
     load_labels,
     load_vocab_from_hub,
     load_metadata_from_hub,
+    prepare_octis_files,
+    load_training_data,
+    TrainingData,
     PROCESSED_DATA_DIR,
 )
 
@@ -37,6 +40,9 @@ __all__ = [
     "load_labels",
     "load_vocab_from_hub",
     "load_metadata_from_hub",
+    "prepare_octis_files",
+    "load_training_data",
+    "TrainingData",
     "PROCESSED_DATA_DIR",
     # Tokenization
     "tokenize_document",

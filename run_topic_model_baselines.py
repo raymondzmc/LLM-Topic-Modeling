@@ -234,6 +234,5 @@ if __name__ == '__main__':
     parser.add_argument('--solver', type=str, default='adam')
     parser.add_argument('--eval_only', action='store_true')
     parser.add_argument('--recompute_metrics', action='store_true')
-    parser.add_argument('--fastopic_batch_size', type=int, default=None, help='Override batch size for FASTopic (for memory management)')
     args = parser.parse_args()
     run(args)

@@ -205,9 +205,9 @@ class CTM(object):
         topic_doc_list = []
         for batch_samples in loader:
             # batch_size x vocab_size
-            X = batch_samples['X']
+            X = batch_samples['X_bow']
             X = X.reshape(X.shape[0], -1)
-            X_bert = batch_samples['X_bert']
+            X_bert = batch_samples['X_contextual']
             if self.USE_CUDA:
                 X = X.cuda()
                 X_bert = X_bert.cuda()
@@ -241,9 +241,9 @@ class CTM(object):
         samples_processed = 0
         for batch_samples in loader:
             # batch_size x vocab_size
-            X = batch_samples['X']
+            X = batch_samples['X_bow']
             X = X.reshape(X.shape[0], -1)
-            X_bert = batch_samples['X_bert']
+            X_bert = batch_samples['X_contextual']
 
             if self.USE_CUDA:
                 X = X.cuda()
@@ -369,9 +369,9 @@ class CTM(object):
         with torch.no_grad():
             for batch_samples in loader:
                 # batch_size x vocab_size
-                X = batch_samples['X']
+                X = batch_samples['X_bow']
                 X = X.reshape(X.shape[0], -1)
-                X_bert = batch_samples['X_bert']
+                X_bert = batch_samples['X_contextual']
 
                 if self.USE_CUDA:
                     X = X.cuda()
@@ -491,9 +491,9 @@ class CTM(object):
                 collect_theta = []
                 for batch_samples in loader:
                     # batch_size x vocab_size
-                    x = batch_samples['X']
+                    x = batch_samples['X_bow']
                     x = x.reshape(x.shape[0], -1)
-                    x_bert = batch_samples['X_bert']
+                    x_bert = batch_samples['X_contextual']
                     if self.USE_CUDA:
                         x = x.cuda()
                         x_bert = x_bert.cuda()
