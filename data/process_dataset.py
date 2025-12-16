@@ -14,7 +14,7 @@ from datasets import Dataset, load_from_disk, Features, Value, Sequence
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-from llm import compute_word_log_prob
+# from llm import compute_word_log_prob
 
 from data.loaders import get_hf_dataset, get_local_dataset, save_and_upload_dataset, PROCESSED_DATA_DIR
 from data.tokenization import tokenize_dataset_batch
