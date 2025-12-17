@@ -12,16 +12,19 @@ from datetime import datetime
 import numpy as np
 import torch
 from tqdm import tqdm
-from datasets import Dataset, load_from_disk, Features, Value, Sequence, concatenate_datasets
+from datasets import load_from_disk
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
-# from llm import compute_word_log_prob
-
-from data.loaders import get_hf_dataset, get_local_dataset, save_and_upload_dataset, PROCESSED_DATA_DIR
+from data.loaders import get_hf_dataset, get_local_dataset, PROCESSED_DATA_DIR
 from data.tokenization import tokenize_dataset_batch
-from data.processing_utils import get_device_info, collate_fn, extract_embeddings, write_batch_to_parquet
-from settings import settings
+from data.processing_utils import (
+    get_device_info,
+    collate_fn,
+    extract_embeddings,
+    write_batch_to_parquet,
+    save_hf_dataset_from_parquet,
+)
 
 def main(args):
     """Main processing function."""
@@ -245,40 +248,10 @@ def main(args):
         
         print(f"\nProcessing completed in {processing_time_seconds:.2f} seconds ({processing_time_seconds/60:.2f} minutes)")
         
-        # Free GPU memory before loading datasets
+        # Free GPU memory before saving
         del model
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-        
-        # Load and concatenate all Parquet files into a HuggingFace Dataset
-        print(f"\nCreating HuggingFace Dataset from {total_examples} processed examples ({len(parquet_files)} Parquet files)...")
-        
-        # Define features with explicit float32 dtypes for embeddings and logits
-        features = Features({
-            'id': Value('int64'),
-            'context': Value('string'),
-            'next_word': Value('string'),
-            'next_word_logits': Sequence(Value('float32')),
-            'input_embeddings': Sequence(Sequence(Value('float32'))),
-            'bow': Value('string'),
-        })
-        
-        # Add label if it exists (can be string or int)
-        if has_labels:
-            if first_label_type == str:
-                features['label'] = Value('string')
-            else:
-                features['label'] = Value('int64')
-        
-        # Load datasets from Parquet files and concatenate
-        datasets_list = []
-        for pf in tqdm(parquet_files, desc="Loading Parquet files"):
-            ds = Dataset.from_parquet(pf, features=features)
-            datasets_list.append(ds)
-        
-        processed_dataset = concatenate_datasets(datasets_list)
-        processed_dataset.info.description = f"Processed topic modeling dataset from {args.dataset}"
-        processed_dataset.info.dataset_name = args.save_name
         
         # Create metadata
         metadata = {
@@ -294,18 +267,26 @@ def main(args):
             "vocab_size": len(vocab),
         }
         
-        print(f"Dataset created with {len(processed_dataset)} examples")
-        print(f"Dataset features: {processed_dataset.features}")
+        # Save directly to HuggingFace dataset format using memory-efficient streaming
+        print(f"\nSaving dataset with {total_examples} examples ({len(parquet_files)} Parquet files)...")
         
-        # Save locally and optionally upload to HuggingFace Hub
-        save_and_upload_dataset(
-            processed_dataset,
-            vocab,
-            metadata,
-            args.save_name,
-            hf_repo_name=args.hf_repo_name,
-            private=args.hf_private
+        local_path = os.path.join(PROCESSED_DATA_DIR, args.save_name)
+        save_hf_dataset_from_parquet(
+            parquet_files=parquet_files,
+            output_dir=local_path,
+            vocab=vocab,
+            metadata=metadata,
+            dataset_name=args.save_name,
+            description=f"Processed topic modeling dataset from {args.dataset}",
         )
+        
+        print(f"Dataset saved to: {local_path}")
+        
+        # Verify by loading (memory-mapped, doesn't load all into memory)
+        print("\nVerifying saved dataset...")
+        loaded_dataset = load_from_disk(local_path)
+        print(f"  Loaded {len(loaded_dataset)} examples")
+        print(f"  Features: {loaded_dataset.features}")
     
     finally:
         # Clean up temp directory
@@ -331,15 +312,12 @@ if __name__ == '__main__':
     parser.add_argument('--embedding_method', type=str, default='last', choices=['mean', 'last'])
     parser.add_argument('--save_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=32)
-    parser.add_argument('--hf_private', action='store_true')
     args = parser.parse_args()
     
     print(f'Processing dataset "{args.dataset}"')
 
     if args.save_name is None:
         args.save_name = f"{os.path.basename(args.dataset).split('.')[0]}_{os.path.basename(args.model_name)}_vocab_{args.vocab_size}_{args.embedding_method}"
-
-    args.hf_repo_name = f"{settings.hf_username}/{args.save_name}"
 
     print(f'Processing dataset "{args.dataset}" with save name "{args.save_name}"')
     

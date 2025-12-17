@@ -1,11 +1,14 @@
 """Processing utilities for topic modeling dataset creation."""
 
 import os
+import json
+import time
 import platform
 import torch
 import pyarrow as pa
 import pyarrow.parquet as pq
 from typing import Optional
+from tqdm import tqdm
 from llm import jinja_template_manager
 
 
@@ -209,4 +212,129 @@ def write_batch_to_parquet(
     pq.write_table(table, parquet_path, compression=compression)
     
     return parquet_path
+
+
+def convert_parquet_to_arrow(
+    parquet_files: list[str],
+    arrow_path: str,
+    show_progress: bool = True
+) -> int:
+    """Convert multiple Parquet files to a single Arrow IPC stream file.
+    
+    This is memory-efficient: reads and writes one batch at a time without
+    loading all data into memory.
+    
+    Args:
+        parquet_files: List of paths to Parquet files to convert
+        arrow_path: Output path for the Arrow IPC stream file
+        show_progress: Whether to show a progress bar
+        
+    Returns:
+        Number of rows written
+    """
+    writer = None
+    sink = None
+    rows_written = 0
+    
+    iterator = tqdm(parquet_files, desc="Converting to Arrow format") if show_progress else parquet_files
+    
+    for pf in iterator:
+        # Read parquet file as a table
+        table = pq.read_table(pf)
+        
+        if writer is None:
+            # Initialize IPC stream writer with schema from first file
+            sink = pa.OSFile(arrow_path, 'wb')
+            writer = pa.ipc.new_stream(sink, table.schema)
+        
+        # Write record batches
+        for batch in table.to_batches():
+            writer.write_batch(batch)
+            rows_written += batch.num_rows
+    
+    if writer is not None:
+        writer.close()
+    if sink is not None:
+        sink.close()
+    
+    return rows_written
+
+
+def save_hf_dataset_from_parquet(
+    parquet_files: list[str],
+    output_dir: str,
+    vocab: list[str],
+    metadata: dict,
+    dataset_name: str,
+    description: str = ""
+) -> str:
+    """Save Parquet files as a HuggingFace-compatible dataset directory.
+    
+    Creates the Arrow data file and all necessary metadata files for
+    compatibility with `datasets.load_from_disk()`.
+    
+    Args:
+        parquet_files: List of paths to Parquet files
+        output_dir: Directory to save the dataset
+        vocab: Vocabulary list to save
+        metadata: Metadata dictionary to save
+        dataset_name: Name of the dataset (used for fingerprint)
+        description: Dataset description
+        
+    Returns:
+        Path to the saved dataset directory
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Convert Parquet files to Arrow format
+    arrow_path = os.path.join(output_dir, 'data-00000-of-00001.arrow')
+    rows_written = convert_parquet_to_arrow(parquet_files, arrow_path)
+    
+    print(f"  Written {rows_written} rows to Arrow format")
+    
+    # Create dataset_info.json
+    arrow_size = os.path.getsize(arrow_path)
+    dataset_info = {
+        "description": description,
+        "citation": "",
+        "homepage": "",
+        "license": "",
+        "features": {},
+        "splits": {
+            "train": {
+                "name": "train",
+                "num_bytes": arrow_size,
+                "num_examples": rows_written,
+            }
+        },
+        "download_size": arrow_size,
+        "dataset_size": arrow_size,
+    }
+    
+    with open(os.path.join(output_dir, 'dataset_info.json'), 'w') as f:
+        json.dump(dataset_info, f, indent=2)
+    
+    # Create state.json (HuggingFace datasets format)
+    state = {
+        "_data_files": [{"filename": "data-00000-of-00001.arrow"}],
+        "_fingerprint": f"{dataset_name}_{int(time.time())}",
+        "_format_columns": None,
+        "_format_kwargs": {},
+        "_format_type": None,
+        "_output_all_columns": False,
+        "_split": "train",
+    }
+    
+    with open(os.path.join(output_dir, 'state.json'), 'w') as f:
+        json.dump(state, f, indent=2)
+    
+    # Save vocab
+    with open(os.path.join(output_dir, 'vocab.json'), 'w') as f:
+        json.dump(vocab, f, indent=2)
+    
+    # Save metadata
+    with open(os.path.join(output_dir, 'metadata.json'), 'w') as f:
+        json.dump(metadata, f, indent=2)
+    
+    return output_dir
 
