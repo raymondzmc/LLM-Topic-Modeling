@@ -373,15 +373,37 @@ def run(args: argparse.Namespace):
         wandb_log[f"seed_{seed}/training_time"] = training_time
         wandb.log(wandb_log)
         
+        # Upload artifacts for this seed
+        artifact = wandb.Artifact(
+            name=f"{args.model}_K{args.num_topics}_seed{seed}",
+            type="model",
+            description=f"Model output for {args.model} with {args.num_topics} topics (seed {seed})"
+        )
+        artifact.add_file(model_output_path)
+        artifact.add_file(topics_path)
+        artifact.add_file(eval_results_path)
+        wandb.log_artifact(artifact)
+        
         all_results.append(evaluation_results)
     
     # Compute and save aggregated results
     averaged_results = compute_aggregate_results(args.results_path)
-    with open(os.path.join(args.results_path, 'averaged_results.json'), 'w', encoding='utf-8') as f:
+    averaged_results_path = os.path.join(args.results_path, 'averaged_results.json')
+    with open(averaged_results_path, 'w', encoding='utf-8') as f:
         json.dump(averaged_results, f)
     
     # Log averaged results to wandb
     wandb.log({f"avg/{k}": v for k, v in averaged_results.items()})
+    
+    # Upload final aggregated results artifact
+    final_artifact = wandb.Artifact(
+        name=f"{args.model}_K{args.num_topics}_results",
+        type="results",
+        description=f"Aggregated results for {args.model} with {args.num_topics} topics"
+    )
+    final_artifact.add_dir(args.results_path)
+    wandb.log_artifact(final_artifact)
+    
     wandb.finish()
     
     print(f"\nResults saved to: {args.results_path}")

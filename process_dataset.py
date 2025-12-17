@@ -4,13 +4,15 @@ import os
 import json
 import argparse
 import time
+import tempfile
+import shutil
 from collections import Counter
 from datetime import datetime
 
 import numpy as np
 import torch
 from tqdm import tqdm
-from datasets import Dataset, load_from_disk, Features, Value, Sequence
+from datasets import Dataset, load_from_disk, Features, Value, Sequence, concatenate_datasets
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
@@ -18,7 +20,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 
 from data.loaders import get_hf_dataset, get_local_dataset, save_and_upload_dataset, PROCESSED_DATA_DIR
 from data.tokenization import tokenize_dataset_batch
-from data.processing_utils import get_device_info, collate_fn, extract_embeddings
+from data.processing_utils import get_device_info, collate_fn, extract_embeddings, write_batch_to_parquet
 from settings import settings
 
 def main(args):
@@ -132,168 +134,183 @@ def main(args):
     if device_info.get('cuda_available') and device.type == 'cuda':
         print(f"  GPU: {device_info.get('gpu_name', 'Unknown')}")
     
-    processed_examples = []
+    # Create temp directory for incremental Arrow file writes (to avoid OOM)
+    temp_dir = tempfile.mkdtemp(prefix='topic_model_processing_')
+    parquet_files = []
+    total_examples = 0
+    has_labels = None  # Will be determined from first batch
+    first_label_type = None
+    
+    # Configure batch accumulation for efficient writes
+    write_batch_size = 500  # Write to disk every N examples
+    accumulated_examples = []
     
     # Start timer
     start_time = time.time()
     start_datetime = datetime.now().isoformat()
     
-    for batch in tqdm(dataloader, desc="Processing batches"):
-        input_ids = batch['input_ids'].to(device)
-        attention_mask = batch['attention_mask'].to(device)
-        contexts = batch['contexts']
-        ids = batch['ids']
-        labels = batch['labels']
-        bow_lines = batch['bow_lines']
-        batch_size = input_ids.shape[0]
+    try:
+        batch_write_num = 0
         
-        # Compute the probabilities for all examples in the batch
-        with torch.no_grad():
-            outputs = model(input_ids, attention_mask=attention_mask, use_cache=True, output_hidden_states=True)
+        for batch in tqdm(dataloader, desc="Processing batches"):
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            contexts = batch['contexts']
+            ids = batch['ids']
+            labels = batch['labels']
+            bow_lines = batch['bow_lines']
+            batch_size = input_ids.shape[0]
+            
+            # Compute the probabilities for all examples in the batch
+            with torch.no_grad():
+                outputs = model(
+                    input_ids,
+                    attention_mask=attention_mask,
+                    use_cache=False,
+                    output_hidden_states=True,
+                )
+            
+            logits = outputs.logits
+            next_token_logits = logits[:, -1, :]
+            next_words = tokenizer.batch_decode(torch.argmax(next_token_logits, dim=-1))
+            
+            # Process each example in the batch
+            for b_idx in range(batch_size):
+                context = contexts[b_idx]
+                example_id = ids[b_idx]
+                example_label = labels[b_idx]
+                example_bow = bow_lines[b_idx]
+                example_next_token_logits = next_token_logits[b_idx:b_idx+1, :]
+                
+                # Extract embeddings using helper function
+                embeddings = extract_embeddings(
+                    outputs.hidden_states,
+                    attention_mask,
+                    b_idx,
+                    args.hidden_state_layer,
+                    args.embedding_method
+                )
+                
+                # Compute next word logits for words in the vocab
+                vocab_logits = example_next_token_logits[0, vocab_token_prefix]
+                all_logits = {vocab[i]: vocab_logits[i].item() for i in range(len(vocab))}
+                next_word_logits = [all_logits[word] for word in vocab]
+
+                # Convert logits to float32 to save storage space
+                next_word_logits = np.array(next_word_logits, dtype=np.float32).tolist()
+
+                processed_example = {
+                    'id': example_id,
+                    'context': context,
+                    'next_word': next_words[b_idx],
+                    'next_word_logits': next_word_logits,
+                    'input_embeddings': embeddings,
+                    'bow': example_bow,
+                }
+                if example_label is not None:
+                    processed_example['label'] = example_label
+                    if has_labels is None:
+                        has_labels = True
+                        first_label_type = type(example_label)
+                elif has_labels is None:
+                    has_labels = False
+                
+                accumulated_examples.append(processed_example)
+                total_examples += 1
+                
+                # Write to disk when batch is full
+                if len(accumulated_examples) >= write_batch_size:
+                    parquet_path = write_batch_to_parquet(accumulated_examples, batch_write_num, temp_dir)
+                    if parquet_path:
+                        parquet_files.append(parquet_path)
+                    accumulated_examples = []
+                    batch_write_num += 1
+            
+            # Clear CUDA cache periodically to free memory
+            if torch.cuda.is_available():
+                del outputs, logits, next_token_logits
+                torch.cuda.empty_cache()
         
-        logits = outputs.logits
-        next_token_logits = logits[:, -1, :]
-        next_words = tokenizer.batch_decode(torch.argmax(next_token_logits, dim=-1))
+        # Write remaining examples
+        if accumulated_examples:
+            parquet_path = write_batch_to_parquet(accumulated_examples, batch_write_num, temp_dir)
+            if parquet_path:
+                parquet_files.append(parquet_path)
+            accumulated_examples = []
+
+        # End timer
+        end_time = time.time()
+        end_datetime = datetime.now().isoformat()
+        processing_time_seconds = end_time - start_time
         
-        # Process each example in the batch
-        for b_idx in range(batch_size):
-            context = contexts[b_idx]
-            example_id = ids[b_idx]
-            example_label = labels[b_idx]
-            example_bow = bow_lines[b_idx]
-            example_next_token_logits = next_token_logits[b_idx:b_idx+1, :]
-            
-            # Extract embeddings using helper function
-            embeddings = extract_embeddings(
-                outputs.hidden_states,
-                attention_mask,
-                b_idx,
-                args.hidden_state_layer,
-                args.embedding_method
-            )
-            
-            # Compute next word logits for words in the vocab
-            # if args.single_token_only and len(single_token_word_idx) == len(vocab):
-            vocab_logits = example_next_token_logits[0, vocab_token_prefix]
-            all_logits = {vocab[i]: vocab_logits[i].item() for i in range(len(vocab))}
-            next_word_logits = [all_logits[word] for word in vocab]
-            # else:
-                # Extract logits for single-token words
-                # single_token_logits = {}
-                # for i in single_token_word_idx:
-                #     single_token_logits[vocab[i]] = example_next_token_logits[0, vocab_token_prefix[i]].item()
-
-                # Compute logits for multi-token words
-                # multi_token_logits = {}
-                # if not args.single_token_only and len(multi_token_word_idx) > 0:
-                #     context_input_ids = input_ids[b_idx:b_idx+1]
-                #     context_length = attention_mask[b_idx].sum().item()
-                    
-                #     if args.word_prob_method == 'product':
-                #         # compute_word_log_prob returns log probabilities
-                #         multi_token_logits = compute_word_log_prob(
-                #             model, tokenizer, device, multi_token_word_idx, context_input_ids,
-                #             vocab_token_ids, vocab, min(args.batch_size, 32), context_length)
-                #     elif args.word_prob_method == 'prefix':
-                #         # For prefix method, use first token logit and split equally among words
-                #         prefix_groups = {}
-                #         for i in multi_token_word_idx:
-                #             prefix = vocab_token_prefix[i]
-                #             prefix_groups.setdefault(prefix, []).append(i)
-
-                #         for prefix, indices in prefix_groups.items():
-                #             prefix_logit = example_next_token_logits[0, prefix].item()
-                #             # Split logit equally (in log space, this is approximate)
-                #             split_logit = prefix_logit - torch.log(torch.tensor(len(indices))).item()
-                #             for i in indices:
-                #                 multi_token_logits[vocab[i]] = split_logit
-                #     else:
-                #         raise ValueError(f"Invalid word probability method: {args.word_prob_method}")
-
-                # all_logits = {**single_token_logits, **multi_token_logits}
-                # next_word_logits = [all_logits[word] for word in vocab]
-            
-            # Convert logits to float32 to save storage space
-            next_word_logits = np.array(next_word_logits, dtype=np.float32).tolist()
-
-            processed_example = {
-                'id': example_id,
-                'context': context,
-                'next_word': next_words[b_idx],
-                'next_word_logits': next_word_logits,
-                'input_embeddings': embeddings,
-                'bow': example_bow,
-            }
-            if example_label is not None:
-                processed_example['label'] = example_label
-            
-            processed_examples.append(processed_example)
-
-    # End timer
-    end_time = time.time()
-    end_datetime = datetime.now().isoformat()
-    processing_time_seconds = end_time - start_time
+        print(f"\nProcessing completed in {processing_time_seconds:.2f} seconds ({processing_time_seconds/60:.2f} minutes)")
+        
+        # Free GPU memory before loading datasets
+        del model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        # Load and concatenate all Parquet files into a HuggingFace Dataset
+        print(f"\nCreating HuggingFace Dataset from {total_examples} processed examples ({len(parquet_files)} Parquet files)...")
+        
+        # Define features with explicit float32 dtypes for embeddings and logits
+        features = Features({
+            'id': Value('int64'),
+            'context': Value('string'),
+            'next_word': Value('string'),
+            'next_word_logits': Sequence(Value('float32')),
+            'input_embeddings': Sequence(Sequence(Value('float32'))),
+            'bow': Value('string'),
+        })
+        
+        # Add label if it exists (can be string or int)
+        if has_labels:
+            if first_label_type == str:
+                features['label'] = Value('string')
+            else:
+                features['label'] = Value('int64')
+        
+        # Load datasets from Parquet files and concatenate
+        datasets_list = []
+        for pf in tqdm(parquet_files, desc="Loading Parquet files"):
+            ds = Dataset.from_parquet(pf, features=features)
+            datasets_list.append(ds)
+        
+        processed_dataset = concatenate_datasets(datasets_list)
+        processed_dataset.info.description = f"Processed topic modeling dataset from {args.dataset}"
+        processed_dataset.info.dataset_name = args.save_name
+        
+        # Create metadata
+        metadata = {
+            "args": {k: v for k, v in vars(args).items() if not k.startswith('_')},
+            "timing": {
+                "start_datetime": start_datetime,
+                "end_datetime": end_datetime,
+                "processing_time_seconds": processing_time_seconds,
+                "num_examples": total_examples,
+                "examples_per_second": total_examples / processing_time_seconds if processing_time_seconds > 0 else 0,
+            },
+            "device_info": device_info,
+            "vocab_size": len(vocab),
+        }
+        
+        print(f"Dataset created with {len(processed_dataset)} examples")
+        print(f"Dataset features: {processed_dataset.features}")
+        
+        # Save locally and optionally upload to HuggingFace Hub
+        save_and_upload_dataset(
+            processed_dataset,
+            vocab,
+            metadata,
+            args.save_name,
+            hf_repo_name=args.hf_repo_name,
+            private=args.hf_private
+        )
     
-    print(f"\nProcessing completed in {processing_time_seconds:.2f} seconds ({processing_time_seconds/60:.2f} minutes)")
-    
-    # Convert processed examples to HuggingFace Dataset
-    print(f"\nCreating HuggingFace Dataset from {len(processed_examples)} processed examples...")
-    
-    dataset_dict = {}
-    if processed_examples:
-        keys = processed_examples[0].keys()
-        for key in keys:
-            dataset_dict[key] = [ex[key] for ex in processed_examples]
-    
-    # Create metadata
-    metadata = {
-        "args": {k: v for k, v in vars(args).items() if not k.startswith('_')},
-        "timing": {
-            "start_datetime": start_datetime,
-            "end_datetime": end_datetime,
-            "processing_time_seconds": processing_time_seconds,
-            "num_examples": len(processed_examples),
-            "examples_per_second": len(processed_examples) / processing_time_seconds if processing_time_seconds > 0 else 0,
-        },
-        "device_info": device_info,
-        "vocab_size": len(vocab),
-    }
-    
-    # Define features with explicit float32 dtypes for embeddings and logits
-    features = Features({
-        'id': Value('int64') if 'id' in dataset_dict else Value('string'),
-        'context': Value('string'),
-        'next_word': Value('string'),
-        'next_word_logits': Sequence(Value('float32')),
-        'input_embeddings': Sequence(Sequence(Value('float32'))),
-        'bow': Value('string'),
-    })
-    
-    # Add label if it exists (can be string or int)
-    if 'label' in dataset_dict:
-        first_label = dataset_dict['label'][0]
-        if isinstance(first_label, str):
-            features['label'] = Value('string')
-        else:
-            features['label'] = Value('int64')
-    
-    # Create dataset with explicit features
-    processed_dataset = Dataset.from_dict(dataset_dict, features=features)
-    processed_dataset.info.description = f"Processed topic modeling dataset from {args.dataset}"
-    processed_dataset.info.dataset_name = args.save_name
-    
-    print(f"Dataset created with {len(processed_dataset)} examples")
-    print(f"Dataset features: {processed_dataset.features}")
-    
-    # Save locally and optionally upload to HuggingFace Hub
-    save_and_upload_dataset(
-        processed_dataset,
-        vocab,
-        metadata,
-        args.save_name,
-        hf_repo_name=args.hf_repo_name,
-        private=args.hf_private
-    )
+    finally:
+        # Clean up temp directory
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
 
 
 if __name__ == '__main__':

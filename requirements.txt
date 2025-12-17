@@ -1,5 +1,6 @@
 bertopic==0.17.0
 datasets==3.0.2
+pyarrow>=14.0.0
 evaluate==0.4.3
 gensim==4.3.3
 openai==1.78.0

@@ -3,6 +3,8 @@
 import os
 import platform
 import torch
+import pyarrow as pa
+import pyarrow.parquet as pq
 from typing import Optional
 from llm import jinja_template_manager
 
@@ -155,4 +157,56 @@ def extract_embeddings(
             return [h[batch_idx, -1].float().cpu().tolist() for h in hidden_states]
         else:
             raise ValueError(f"Unsupported embedding method: {embedding_method}")
+
+
+def write_batch_to_parquet(
+    examples: list[dict],
+    batch_num: int,
+    output_dir: str,
+    compression: str = 'snappy'
+) -> str | None:
+    """Write a batch of processed examples to a Parquet file.
+    
+    This function is used for incremental writing during dataset processing
+    to avoid holding all examples in memory at once.
+    
+    Args:
+        examples: List of processed example dictionaries. Each should have keys:
+            - id: Example identifier
+            - context: Text context
+            - next_word: Predicted next word
+            - next_word_logits: List of logits for vocab words
+            - input_embeddings: Embeddings (list or list of lists)
+            - bow: Bag of words string
+            - label (optional): Example label
+        batch_num: Batch number for file naming
+        output_dir: Directory to write Parquet files to
+        compression: Parquet compression algorithm (default: 'snappy')
+        
+    Returns:
+        Path to written Parquet file, or None if examples is empty
+    """
+    if not examples:
+        return None
+    
+    # Convert to columnar format
+    data = {
+        'id': [ex['id'] for ex in examples],
+        'context': [ex['context'] for ex in examples],
+        'next_word': [ex['next_word'] for ex in examples],
+        'next_word_logits': [ex['next_word_logits'] for ex in examples],
+        'input_embeddings': [ex['input_embeddings'] for ex in examples],
+        'bow': [ex['bow'] for ex in examples],
+    }
+    if 'label' in examples[0]:
+        data['label'] = [ex['label'] for ex in examples]
+    
+    # Create PyArrow table
+    table = pa.table(data)
+    
+    # Write to Parquet file
+    parquet_path = os.path.join(output_dir, f'batch_{batch_num:06d}.parquet')
+    pq.write_table(table, parquet_path, compression=compression)
+    
+    return parquet_path
 
