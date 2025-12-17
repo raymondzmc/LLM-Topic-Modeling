@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-12-18T03:01:54.414822",
+  "results": [
+    {
+      "model_name": "all-MiniLM-L6-v2",
+      "model_type": "embedding",
+      "model_size_mb": 86.65185546875,
+      "num_documents": 50,
+      "total_time_seconds": 0.35764002799987793,
+      "docs_per_second": 139.80537995041502,
+      "time_per_doc_ms": 7.152800559997559,
+      "batch_size": 32,
+      "device": "cpu",
+      "gpu_name": null,
+      "gpu_memory_mb": null,
+      "notes": "Sentence-BERT model used in baseline topic models"
+    }
+  ]
+}

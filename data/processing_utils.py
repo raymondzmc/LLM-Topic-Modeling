@@ -292,14 +292,13 @@ def save_hf_dataset_from_parquet(
     
     print(f"  Written {rows_written} rows to Arrow format")
     
-    # Create dataset_info.json
+    # Create dataset_info.json (minimal - let HuggingFace infer features from Arrow)
     arrow_size = os.path.getsize(arrow_path)
     dataset_info = {
         "description": description,
         "citation": "",
         "homepage": "",
         "license": "",
-        "features": {},
         "splits": {
             "train": {
                 "name": "train",
