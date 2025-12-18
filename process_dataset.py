@@ -24,7 +24,9 @@ from data.processing_utils import (
     extract_embeddings,
     write_batch_to_parquet,
     save_hf_dataset_from_parquet,
+    upload_dataset_to_hub,
 )
+from settings import settings
 
 def main(args):
     """Main processing function."""
@@ -282,11 +284,13 @@ def main(args):
         
         print(f"Dataset saved to: {local_path}")
         
-        # Verify by loading (memory-mapped, doesn't load all into memory)
-        print("\nVerifying saved dataset...")
-        loaded_dataset = load_from_disk(local_path)
-        print(f"  Loaded {len(loaded_dataset)} examples")
-        print(f"  Features: {loaded_dataset.features}")
+        # Upload to HuggingFace Hub if repo name is provided
+        if args.hf_repo_name:
+            upload_dataset_to_hub(
+                local_path=local_path,
+                hf_repo_name=args.hf_repo_name,
+                private=args.hf_private,
+            )
     
     finally:
         # Clean up temp directory
@@ -312,12 +316,20 @@ if __name__ == '__main__':
     parser.add_argument('--embedding_method', type=str, default='last', choices=['mean', 'last'])
     parser.add_argument('--save_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=32)
+    parser.add_argument('--hf_private', action='store_true', help="Make HuggingFace dataset private")
+    parser.add_argument('--no_upload', action='store_true', help="Skip uploading to HuggingFace Hub")
     args = parser.parse_args()
     
     print(f'Processing dataset "{args.dataset}"')
 
     if args.save_name is None:
         args.save_name = f"{os.path.basename(args.dataset).split('.')[0]}_{os.path.basename(args.model_name)}_vocab_{args.vocab_size}_{args.embedding_method}"
+
+    # Set HuggingFace repo name (None if --no_upload is set)
+    if args.no_upload:
+        args.hf_repo_name = None
+    else:
+        args.hf_repo_name = f"{settings.hf_username}/{args.save_name}"
 
     print(f'Processing dataset "{args.dataset}" with save name "{args.save_name}"')
     

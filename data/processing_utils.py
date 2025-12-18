@@ -337,3 +337,72 @@ def save_hf_dataset_from_parquet(
     
     return output_dir
 
+
+def upload_dataset_to_hub(
+    local_path: str,
+    hf_repo_name: str,
+    private: bool = False
+) -> bool:
+    """Upload a locally saved dataset to HuggingFace Hub.
+    
+    Uploads the dataset (Arrow file) and additional files (vocab.json, metadata.json)
+    to a HuggingFace dataset repository.
+    
+    Args:
+        local_path: Path to the local dataset directory
+        hf_repo_name: HuggingFace repository ID (e.g., 'username/dataset-name')
+        private: Whether to make the HF dataset private (default: False for public)
+        
+    Returns:
+        True if upload succeeded, False otherwise
+    """
+    from datasets import load_from_disk
+    from huggingface_hub import HfApi
+    
+    print(f"\nUploading dataset to HuggingFace Hub: {hf_repo_name}")
+    
+    try:
+        # Load the dataset for pushing
+        dataset = load_from_disk(local_path)
+        
+        # Push dataset to hub
+        dataset.push_to_hub(
+            hf_repo_name,
+            private=private,
+        )
+        print(f"  ✓ Dataset pushed to hub ({len(dataset)} examples)")
+        
+        # Upload additional files (vocab.json, metadata.json)
+        api = HfApi()
+        
+        vocab_path = os.path.join(local_path, "vocab.json")
+        metadata_path = os.path.join(local_path, "metadata.json")
+        
+        if os.path.exists(vocab_path):
+            api.upload_file(
+                path_or_fileobj=vocab_path,
+                path_in_repo="vocab.json",
+                repo_id=hf_repo_name,
+                repo_type="dataset",
+            )
+            with open(vocab_path, 'r') as f:
+                vocab = json.load(f)
+            print(f"  ✓ vocab.json uploaded ({len(vocab)} words)")
+        
+        if os.path.exists(metadata_path):
+            api.upload_file(
+                path_or_fileobj=metadata_path,
+                path_in_repo="metadata.json",
+                repo_id=hf_repo_name,
+                repo_type="dataset",
+            )
+            print(f"  ✓ metadata.json uploaded")
+        
+        print(f"\n✓ Dataset successfully uploaded to: https://huggingface.co/datasets/{hf_repo_name}")
+        return True
+        
+    except Exception as e:
+        print(f"\n✗ Failed to upload to HuggingFace Hub: {e}")
+        print(f"  Dataset is still saved locally at: {local_path}")
+        return False
+

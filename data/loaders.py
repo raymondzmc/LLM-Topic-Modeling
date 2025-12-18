@@ -80,7 +80,6 @@ def get_local_dataset(dataset_path: str) -> Dataset:
 
 def load_or_download_dataset(
     repo_id: str,
-    local_name: Optional[str] = None,
     force_download: bool = False
 ) -> tuple[Dataset, list[str], dict]:
     """Load processed dataset from local cache or download from HuggingFace Hub.
@@ -89,16 +88,14 @@ def load_or_download_dataset(
     downloads from HuggingFace Hub and caches locally.
     
     Args:
-        repo_id: HuggingFace repository ID (e.g., 'username/dataset-name')
-        local_name: Local directory name (defaults to repo_id basename)
+        repo_id: HuggingFace repository ID (e.g., 'username/dataset-name') or dataset name
         force_download: Force re-download even if local exists
         
     Returns:
         Tuple of (dataset, vocab, metadata)
     """
-    if local_name is None:
-        local_name = repo_id.split("/")[-1]
-    
+    # Use basename of repo_id as local directory name
+    local_name = repo_id.split("/")[-1]
     local_path = os.path.join(PROCESSED_DATA_DIR, local_name)
     
     # Try to load from local first
@@ -142,125 +139,6 @@ def load_or_download_dataset(
     print(f"Dataset cached locally at: {local_path}")
     
     return dataset, vocab, metadata
-
-
-def save_processed_dataset(
-    dataset: Dataset,
-    vocab: list[str],
-    metadata: dict,
-    local_name: str
-) -> str:
-    """Save processed dataset to local processed_data/ directory.
-    
-    Args:
-        dataset: HuggingFace Dataset to save
-        vocab: List of vocabulary words
-        metadata: Metadata dictionary
-        local_name: Local directory name
-        
-    Returns:
-        Path to the saved dataset
-    """
-    local_path = os.path.join(PROCESSED_DATA_DIR, local_name)
-    os.makedirs(local_path, exist_ok=True)
-    
-    # Save dataset
-    dataset.save_to_disk(local_path)
-    
-    # Save vocab
-    vocab_path = os.path.join(local_path, "vocab.json")
-    with open(vocab_path, 'w') as f:
-        json.dump(vocab, f, indent=2)
-    
-    # Save metadata
-    metadata_path = os.path.join(local_path, "metadata.json")
-    with open(metadata_path, 'w') as f:
-        json.dump(metadata, f, indent=2)
-    
-    print(f"Dataset saved to: {local_path}")
-    return local_path
-
-
-def save_and_upload_dataset(
-    dataset: Dataset,
-    vocab: list[str],
-    metadata: dict,
-    local_name: str,
-    hf_repo_name: Optional[str] = None,
-    private: bool = False
-) -> str:
-    """Save processed dataset locally and optionally upload to HuggingFace Hub.
-    
-    Args:
-        dataset: HuggingFace Dataset to save
-        vocab: List of vocabulary words
-        metadata: Metadata dictionary
-        local_name: Local directory name
-        hf_repo_name: HuggingFace repository ID (e.g., 'username/dataset-name')
-        private: Whether to make the HF dataset private (default: False for public)
-        
-    Returns:
-        Path to the saved local dataset
-    """
-    from huggingface_hub import HfApi
-    
-    # Save locally first
-    local_path = save_processed_dataset(dataset, vocab, metadata, local_name)
-    
-    # Upload to HuggingFace Hub if repo name provided
-    if hf_repo_name:
-        print(f"\nUploading dataset to HuggingFace Hub: {hf_repo_name}")
-        
-        try:
-            # Push dataset
-            dataset.push_to_hub(
-                hf_repo_name,
-                private=private,
-            )
-            print(f"  ✓ Dataset pushed to hub")
-            
-            # Upload additional files
-            vocab_path = os.path.join(local_path, "vocab.json")
-            metadata_path = os.path.join(local_path, "metadata.json")
-            
-            api = HfApi()
-            
-            api.upload_file(
-                path_or_fileobj=vocab_path,
-                path_in_repo="vocab.json",
-                repo_id=hf_repo_name,
-                repo_type="dataset",
-            )
-            print(f"  ✓ vocab.json uploaded ({len(vocab)} words)")
-            
-            api.upload_file(
-                path_or_fileobj=metadata_path,
-                path_in_repo="metadata.json",
-                repo_id=hf_repo_name,
-                repo_type="dataset",
-            )
-            print(f"  ✓ metadata.json uploaded")
-            
-            print(f"\n✓ Dataset successfully uploaded to: https://huggingface.co/datasets/{hf_repo_name}")
-            
-        except Exception as e:
-            print(f"\n✗ Failed to upload to HuggingFace Hub: {e}")
-            print(f"  Dataset is still saved locally at: {local_path}")
-    
-    return local_path
-
-
-def load_processed_dataset(repo_id: str) -> tuple[Dataset, list[str], dict]:
-    """Load a processed dataset from HuggingFace Hub (deprecated, use load_or_download_dataset).
-    
-    Args:
-        repo_id: HuggingFace repository ID (e.g., 'username/dataset-name')
-        
-    Returns:
-        Tuple of (dataset, vocab, metadata)
-    """
-    # Redirect to load_or_download_dataset for backward compatibility
-    return load_or_download_dataset(repo_id)
 
 
 def load_bow(dataset: Dataset) -> list[str]:
@@ -378,107 +256,61 @@ def prepare_octis_files(
 
 def load_training_data(
     data_path: str,
-    local_name: Optional[str] = None,
     for_generative: bool = True
 ) -> TrainingData:
     """Load training data from local cache or HuggingFace Hub.
+    
+    First checks if a local copy exists in processed_data/. If not, downloads
+    from HuggingFace Hub and caches locally.
     
     Handles both generative models (which need embeddings + logits) and
     baseline models (which only need BOW data).
     
     Args:
-        data_path: Path to local data or HuggingFace repo ID
-        local_name: Optional local name for caching
+        data_path: HuggingFace repo ID (e.g., 'username/dataset-name') or dataset name
         for_generative: Whether loading for generative model (needs embeddings)
         
     Returns:
         TrainingData containing all necessary data for training
     """
-    # Determine if this is a HF repo or local path
-    is_hf_repo = "/" in data_path
-    local_path_exists = os.path.exists(data_path)
+    # Determine local path for caching (use basename of data_path)
+    local_name = data_path.split("/")[-1]
+    local_data_path = os.path.join(PROCESSED_DATA_DIR, local_name)
     
-    # Determine local name and processed_data path
-    resolved_local_name = local_name or data_path.split("/")[-1]
-    processed_data_path = os.path.join(PROCESSED_DATA_DIR, resolved_local_name)
-    processed_data_exists = os.path.exists(processed_data_path)
+    # Load from local cache or download from HuggingFace Hub
+    dataset, vocab, metadata = load_or_download_dataset(data_path)
     
-    # Case 1: Load from HF or processed_data (new format)
-    if is_hf_repo or processed_data_exists or (not local_path_exists):
-        dataset, vocab, metadata = load_or_download_dataset(
-            data_path,
-            local_name=local_name,
-        )
-        local_data_path = os.path.join(PROCESSED_DATA_DIR, resolved_local_name)
-        
-        # Get labels if available
-        labels = list(dataset['label']) if 'label' in dataset.column_names else None
-        
-        # Create BOW corpus from dataset
-        bow_corpus = [bow.split() for bow in dataset['bow']]
-        
-        # For baseline models, filter out empty documents to avoid OCTIS issues
-        if not for_generative:
-            non_empty_indices = [i for i, doc in enumerate(bow_corpus) if len(doc) > 0]
-            bow_corpus = [bow_corpus[i] for i in non_empty_indices]
-            if labels is not None:
-                labels = [labels[i] for i in non_empty_indices]
-            
-            # Prepare OCTIS-compatible files
-            prepare_octis_files(local_data_path, bow_corpus, vocab, labels)
-        
-        # For generative models, also extract embeddings and logits
-        processed_dataset = None
-        if for_generative:
-            processed_dataset = {
-                'input_embeddings': dataset['input_embeddings'],
-                'next_word_logits': dataset['next_word_logits'],
-                'words': bow_corpus,
-            }
-        
-        return TrainingData(
-            processed_dataset=processed_dataset,
-            vocab=vocab,
-            bow_corpus=bow_corpus,
-            labels=labels,
-            metadata=metadata,
-            local_path=local_data_path,
-        )
+    # Get labels if available
+    labels = list(dataset['label']) if 'label' in dataset.column_names else None
     
-    # Case 2: Load from legacy local format (bow_dataset.txt)
-    else:
-        local_data_path = data_path
+    # Create BOW corpus from dataset
+    bow_corpus = [bow.split() for bow in dataset['bow']]
+    
+    # For baseline models, filter out empty documents to avoid OCTIS issues
+    if not for_generative:
+        non_empty_indices = [i for i, doc in enumerate(bow_corpus) if len(doc) > 0]
+        bow_corpus = [bow_corpus[i] for i in non_empty_indices]
+        if labels is not None:
+            labels = [labels[i] for i in non_empty_indices]
         
-        # Check if vocab.json exists
-        vocab_path = os.path.join(local_data_path, 'vocab.json')
-        if os.path.exists(vocab_path):
-            with open(vocab_path, encoding='utf-8') as f:
-                vocab = json.load(f)
-        else:
-            vocab = None
-        
-        # Load BOW corpus
-        bow_path = os.path.join(local_data_path, 'bow_dataset.txt')
-        with open(bow_path, 'r', encoding='utf-8') as f:
-            bow_corpus = [line.strip().split() for line in f]
-            ignore_indices = [i for i, doc in enumerate(bow_corpus) if len(doc) == 0 or doc == ['null']]
-            bow_corpus = [doc for i, doc in enumerate(bow_corpus) if i not in ignore_indices]
-        
-        # Load labels if available
-        labels_path = os.path.join(local_data_path, 'numeric_labels.txt')
-        if os.path.exists(labels_path):
-            with open(labels_path, 'r', encoding='utf-8') as f:
-                labels = [line.strip() for line in f if line.strip()]
-            labels = [label for i, label in enumerate(labels) if i not in ignore_indices]
-        else:
-            labels = None
-        
-        return TrainingData(
-            processed_dataset=None,
-            vocab=vocab,
-            bow_corpus=bow_corpus,
-            labels=labels,
-            metadata=None,
-            local_path=local_data_path,
-        )
+        # Prepare OCTIS-compatible files
+        prepare_octis_files(local_data_path, bow_corpus, vocab, labels)
+    
+    # For generative models, also extract embeddings and logits
+    processed_dataset = None
+    if for_generative:
+        processed_dataset = {
+            'input_embeddings': dataset['input_embeddings'],
+            'next_word_logits': dataset['next_word_logits'],
+            'words': bow_corpus,
+        }
+    
+    return TrainingData(
+        processed_dataset=processed_dataset,
+        vocab=vocab,
+        bow_corpus=bow_corpus,
+        labels=labels,
+        metadata=metadata,
+        local_path=local_data_path,
+    )
 

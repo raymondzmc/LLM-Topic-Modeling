@@ -223,7 +223,6 @@ def run(args: argparse.Namespace):
     is_generative = args.model in LLM_MODELS
     training_data = load_training_data(
         args.data_path,
-        local_name=args.local_name,
         for_generative=is_generative,
     )
     
@@ -384,7 +383,63 @@ def run(args: argparse.Namespace):
     # Log averaged results to wandb
     wandb.log({f"avg/{k}": v for k, v in averaged_results.items()})
     
+    # Upload model artifacts before finishing
+    # This allows re-evaluation from wandb later
+    # Files uploaded:
+    #   - seed_{n}/model_output.pt: Contains 'topics', 'topic-word-matrix', 'topic-document-matrix'
+    #   - seed_{n}/topics.json: List of topic word lists for easy viewing
+    #   - seed_{n}/evaluation_results.json: All computed evaluation metrics
+    #   - averaged_results.json: Aggregated metrics across all seeds
+    print("\nUploading model artifacts to wandb...")
+    
+    run_name = wandb.run.name if wandb.run else "unnamed"
+    run_id = wandb.run.id if wandb.run else "local"
+    clean_run_name = run_name.replace("/", "-").replace(":", "-").replace(" ", "_")
+    artifact_name = f"model_output_{clean_run_name}_{run_id}"
+    
+    artifact = wandb.Artifact(
+        name=artifact_name,
+        type="model_output",
+        description=f"Model outputs for {args.model} with {args.num_topics} topics across {args.num_seeds} seeds"
+    )
+    
+    # Add all seed directories
+    for seed in range(args.num_seeds):
+        seed_dir = os.path.join(args.results_path, f"seed_{seed}")
+        model_output_file = os.path.join(seed_dir, 'model_output.pt')
+        topics_file = os.path.join(seed_dir, 'topics.json')
+        eval_results_file = os.path.join(seed_dir, 'evaluation_results.json')
+        
+        # Get file sizes for logging
+        model_size_mb = os.path.getsize(model_output_file) / (1024 * 1024)
+        
+        # Add files with organized names
+        artifact.add_file(model_output_file, name=f"seed_{seed}/model_output.pt")
+        artifact.add_file(topics_file, name=f"seed_{seed}/topics.json")
+        artifact.add_file(eval_results_file, name=f"seed_{seed}/evaluation_results.json")
+        print(f"  Added seed_{seed} files ({model_size_mb:.2f} MB)")
+    
+    # Add averaged results
+    artifact.add_file(averaged_results_path, name="averaged_results.json")
+    
+    # Log the artifact (without aliases to avoid potential issues)
+    try:
+        logged_artifact = wandb.log_artifact(artifact)
+        print(f"Artifact '{artifact_name}' queued for upload")
+        # Wait for artifact upload with graceful error handling
+        # wandb will continue retrying in background even if wait() fails
+        try:
+            logged_artifact.wait()
+            print("Artifact upload completed successfully")
+        except Exception as wait_error:
+            print(f"Note: Artifact upload still in progress (wandb will complete in background): {wait_error}")
+    except Exception as e:
+        print(f"Warning: Failed to log artifact: {e}")
+    
+    # Finish the run (this will complete any pending artifact uploads)
     wandb.finish()
+    print(f"\nResults saved to: {args.results_path}")
+    print(f"View run at: https://wandb.ai/{settings.wandb_entity}/{wandb_project}")
     
     print(f"\nResults saved to: {args.results_path}")
 
@@ -395,8 +450,6 @@ if __name__ == '__main__':
     # Data arguments
     parser.add_argument('--data_path', type=str, required=True,
                         help='Path to data directory or HF repo ID')
-    parser.add_argument('--local_name', type=str, default=None,
-                        help='Local name for processed dataset cache')
     parser.add_argument('--results_path', type=str, default=None,
                         help='Path to save results')
     
@@ -447,7 +500,7 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_project', type=str, default=None,
                         help='Wandb project name (default: dataset name)')
     parser.add_argument('--wandb_offline', action='store_true',
-                        help='Run wandb in offline mode')
+                        help='Run wandb in offline mode (artifacts will not be uploaded)')
     
     args = parser.parse_args()
     run(args)
