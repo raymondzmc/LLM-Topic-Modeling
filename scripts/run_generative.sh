@@ -1,30 +1,33 @@
 #!/bin/bash
-# Script to run generative topic model and upload results to wandb
+# Run Generative Topic Model
+# Iterates over 3 datasets x 3 base models
 
-# Default parameters
-DATA_PATH="${DATA_PATH:raymondzmc/tweet_topic_ERNIE-4.5-0.3B-PT_vocab_2000_last}"
-NUM_TOPICS="${NUM_TOPICS:25}"
-NUM_SEEDS="${NUM_SEEDS:5}"
-NUM_EPOCHS="${NUM_EPOCHS:100}"
-TOP_WORDS="${TOP_WORDS:10}"
-BATCH_SIZE="${BATCH_SIZE:64}"
-LR="${LR:0.002}"
+datasets=(
+    "20_newsgroups"
+    "tweet_topic"
+    "stackoverflow"
+)
 
-echo "Running generative topic model..."
-echo "  Data: ${DATA_PATH}"
-echo "  Topics: ${NUM_TOPICS}"
-echo "  Seeds: ${NUM_SEEDS}"
-echo "  Epochs: ${NUM_EPOCHS}"
+models=(
+    "Llama-3.1-8B-Instruct"
+    "ERNIE-4.5-0.3B-PT"
+    "Llama-3.2-1B-Instruct"
+)
 
-python run_topic_model.py \
-    --data_path "${DATA_PATH}" \
-    --model generative \
-    --num_topics ${NUM_TOPICS} \
-    --num_seeds ${NUM_SEEDS} \
-    --num_epochs ${NUM_EPOCHS} \
-    --top_words ${TOP_WORDS} \
-    --batch_size ${BATCH_SIZE} \
-    --lr ${LR}
-
-echo "Done! Results uploaded to wandb."
-
+for dataset in "${datasets[@]}"
+do
+    for model in "${models[@]}"
+    do
+        # Construct full dataset path/name
+        DATA_PATH="raymondzmc/${dataset}_${model}_vocab_2000_last"
+        
+        for K in 25 50 75 100
+        do
+            echo "Running Generative TM on $DATA_PATH with K=$K"
+            python run_topic_model.py \
+                --model generative \
+                --data_path "$DATA_PATH" \
+                --num_topics $K
+        done
+    done
+done
