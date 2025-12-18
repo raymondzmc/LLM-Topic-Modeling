@@ -6,9 +6,9 @@ from openai import OpenAI
 from collections import defaultdict
 from settings import settings
 from llm import jinja_template_manager
-from octis.evaluation_metrics.metrics import AbstractMetric
-from octis.evaluation_metrics.diversity_metrics import TopicDiversity, InvertedRBO
-from octis.evaluation_metrics.coherence_metrics import Coherence
+from evaluation_metrics.abc import AbstractMetric
+from evaluation_metrics.diversity_metrics import TopicDiversity, InvertedRBO
+from evaluation_metrics.coherence_metrics import Coherence
 from gensim.downloader import load as gensim_load
 from gensim.models import KeyedVectors
 from sklearn.metrics.pairwise import pairwise_distances

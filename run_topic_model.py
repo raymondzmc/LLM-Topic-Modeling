@@ -11,20 +11,20 @@ import torch
 import wandb
 
 from gensim.downloader import load as gensim_load
-from octis.dataset.dataset import Dataset as OCTISDataset
-from octis.models.LDA import LDA
-from octis.models.ProdLDA import ProdLDA
-from octis.models.CTM import CTM
-from octis.models.ETM import ETM
+from data.dataset import OCTISDataset
+from models.octis.LDA import LDA
+from models.octis.ProdLDA import ProdLDA
+from models.octis.CTM import CTM
+from models.octis.ETM import ETM
+from models.fastopic import FASTopicTrainer
 from bertopic import BERTopic
 from topmost.data import RawDataset
-
 from data.loaders import load_training_data, prepare_octis_files
 from models.ctm import CTM as GenerativeTM
 from utils.dataset import get_ctm_dataset_generative
-from utils.metrics import compute_aggregate_results, evaluate_topic_model
 from utils.embeddings import get_openai_embedding
-from utils.fastopic_trainer import FASTopicTrainer
+from evaluation_metrics.metrics import compute_aggregate_results, evaluate_topic_model
+
 from settings import settings
 
 

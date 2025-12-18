@@ -1,16 +1,15 @@
 import datetime
 import os
-import math
 from collections import defaultdict
 
 import numpy as np
 import torch
 from torch import optim
-from torch.nn import functional as F
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
-from models.networks.decoding_network import DecoderNetwork
+from models.octis.contextualized_topic_models.decoding_network import (
+    DecoderNetwork)
 from models.octis.early_stopping.pytorchtools import EarlyStopping
 
 
@@ -24,8 +23,7 @@ class CTM(object):
         activation='softplus', dropout=0.2, learn_priors=True, batch_size=64,
         lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, num_samples=10,
         reduce_on_plateau=False, topic_prior_mean=0.0, top_words=10,
-        topic_prior_variance=None, num_data_loader_workers=0, loss_weight=1.0,
-        sparsity_ratio=1.0, temperature=1.0, loss_type='CE'):
+            topic_prior_variance=None, num_data_loader_workers=0):
 
         """
         :param input_size: int, dimension of input
@@ -80,15 +78,6 @@ class CTM(object):
             "reduce_on_plateau must be type bool."
         assert isinstance(topic_prior_mean, float), \
             "topic_prior_mean must be type float"
-        assert isinstance(loss_weight, float), \
-            "loss_weight must be type float"
-        assert isinstance(sparsity_ratio, float), \
-            "sparsity_ratio must be type float"
-        assert isinstance(temperature, float), \
-            "temperature must be type float"
-        assert loss_type in ['CE', 'KL'], \
-            "loss_type must be 'CE' or 'KL'"
-
         # and topic_prior_variance >= 0, \
         # assert isinstance(topic_prior_variance, float), \
         #    "topic prior_variance must be type float"
@@ -112,17 +101,12 @@ class CTM(object):
         self.num_data_loader_workers = num_data_loader_workers
         self.topic_prior_mean = topic_prior_mean
         self.topic_prior_variance = topic_prior_variance
-        self.loss_weight = loss_weight
-        self.sparsity_ratio = sparsity_ratio
-        self.temperature = temperature
-        self.loss_type = loss_type
-
         # init inference avitm network
         self.model = DecoderNetwork(
             input_size, self.bert_size, inference_type, num_topics,
             model_type, hidden_sizes, activation,
             dropout, self.learn_priors, self.topic_prior_mean,
-            self.topic_prior_variance, self.temperature)
+            self.topic_prior_variance)
         self.early_stopping = EarlyStopping(patience=5, verbose=False)
         # init optimizer
         if self.solver == 'adam':
@@ -161,7 +145,7 @@ class CTM(object):
         if self.USE_CUDA:
             self.model = self.model.cuda()
 
-    def _loss(self, teacher_logits, student_probs, prior_mean, prior_variance,
+    def _loss(self, inputs, word_dists, prior_mean, prior_variance,
               posterior_mean, posterior_variance, posterior_log_variance):
         # KL term
         # var division term
@@ -176,25 +160,10 @@ class CTM(object):
         # combine terms
         KL = 0.5 * (
             var_division + diff_term - self.num_topics + logvar_det_division)
-
         # Reconstruction term
-        k = math.ceil(self.sparsity_ratio * teacher_logits.size(1))
-        topk_indices = torch.topk(teacher_logits, k=k, dim=1)[1]
-        mask = torch.zeros_like(teacher_logits)
-        mask.scatter_(1, topk_indices, 1.0)
-        teacher_logits = teacher_logits * mask
-        teacher_probs = torch.softmax(teacher_logits / self.temperature, dim=-1)
+        RL = -torch.sum(inputs * torch.log(word_dists + 1e-10), dim=1)
+        loss = KL + RL
 
-        if self.loss_type == 'CE':
-            RL =  -torch.sum(teacher_probs * torch.log(student_probs + 1e-10), dim=1)
-        elif self.loss_type == 'KL':
-            teacher_probs = teacher_probs.clamp_min(1e-9)
-            student_probs = student_probs.clamp_min(1e-9)
-            RL = torch.sum(teacher_probs * torch.log(teacher_probs / student_probs), dim=1)
-        else:
-            raise ValueError(f"Invalid loss type: {self.loss_type}")
-
-        loss = KL + self.loss_weight * RL
         return loss.sum()
 
     def _train_epoch(self, loader):
@@ -205,9 +174,9 @@ class CTM(object):
         topic_doc_list = []
         for batch_samples in loader:
             # batch_size x vocab_size
-            X = batch_samples['X_bow']
+            X = batch_samples['X']
             X = X.reshape(X.shape[0], -1)
-            X_bert = batch_samples['X_contextual']
+            X_bert = batch_samples['X_bert']
             if self.USE_CUDA:
                 X = X.cuda()
                 X_bert = X_bert.cuda()
@@ -241,9 +210,9 @@ class CTM(object):
         samples_processed = 0
         for batch_samples in loader:
             # batch_size x vocab_size
-            X = batch_samples['X_bow']
+            X = batch_samples['X']
             X = X.reshape(X.shape[0], -1)
-            X_bert = batch_samples['X_contextual']
+            X_bert = batch_samples['X_bert']
 
             if self.USE_CUDA:
                 X = X.cuda()
@@ -369,9 +338,9 @@ class CTM(object):
         with torch.no_grad():
             for batch_samples in loader:
                 # batch_size x vocab_size
-                X = batch_samples['X_bow']
+                X = batch_samples['X']
                 X = X.reshape(X.shape[0], -1)
-                X_bert = batch_samples['X_contextual']
+                X_bert = batch_samples['X_bert']
 
                 if self.USE_CUDA:
                     X = X.cuda()
@@ -430,7 +399,7 @@ class CTM(object):
 
     def _format_file(self):
         model_dir = (
-            "GenerativeTM_nc_{}_tpm_{}_tpv_{}_hs_{}_ac_{}_do_{}_"
+            "AVITM_nc_{}_tpm_{}_tpv_{}_hs_{}_ac_{}_do_{}_"
             "lr_{}_mo_{}_rp_{}".format(
                 self.num_topics, 0.0, 1 - (1. / self.num_topics),
                 self.model_type, self.hidden_sizes, self.activation,
@@ -491,9 +460,9 @@ class CTM(object):
                 collect_theta = []
                 for batch_samples in loader:
                     # batch_size x vocab_size
-                    x = batch_samples['X_bow']
+                    x = batch_samples['X']
                     x = x.reshape(x.shape[0], -1)
-                    x_bert = batch_samples['X_contextual']
+                    x_bert = batch_samples['X_bert']
                     if self.USE_CUDA:
                         x = x.cuda()
                         x_bert = x_bert.cuda()
