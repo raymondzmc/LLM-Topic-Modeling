@@ -9,6 +9,7 @@ rouge_score==0.1.2
 sentencepiece==0.2.0
 sentence-transformers==3.4.0
 spacy==3.7.2
+topmost==1.0.2
 transformers==4.57.3
 wordcloud==1.9.3
 wandb==0.16.6
