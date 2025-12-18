@@ -288,7 +288,7 @@ class AVITM_model(object):
                             self.save(save_dir)
                         break
 
-    def predict(self, dataset):
+    def predict(self, dataset, k=10):
         """Predict input."""
         self.model.eval()
 
@@ -308,7 +308,7 @@ class AVITM_model(object):
                 _, _, _, _, _, _, _, topic_document = self.model(x)
                 topic_document_mat.append(topic_document)
 
-        results = self.get_info()
+        results = self.get_info(k=k)
         # results['test-topic-document-matrix2'] = np.vstack(
         #    np.asarray([i.cpu().detach().numpy() for i in topic_document_mat])).T
         results['test-topic-document-matrix'] = np.asarray(self.get_thetas(dataset)).T
@@ -345,9 +345,9 @@ class AVITM_model(object):
 
         return topics_list
 
-    def get_info(self):
+    def get_info(self, k=10):
         info = {}
-        topic_word = self.get_topics()
+        topic_word = self.get_topics(k)
         topic_word_dist = self.get_topic_word_mat()
         # topic_document_dist = self.get_topic_document_mat()
         info['topics'] = topic_word

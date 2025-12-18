@@ -256,7 +256,7 @@ def run_reevaluate(args: argparse.Namespace):
         # Get metadata
         metadata = artifact.metadata or {}
         num_seeds = metadata.get('num_seeds', 1)
-        top_words = args.top_words or metadata.get('top_words', 20)
+        top_words = args.top_words or metadata.get('top_words', 10)
         model_name = metadata.get('model', 'unknown')
         dataset_name = metadata.get('dataset', 'unknown')
         num_topics = metadata.get('num_topics', 0)
@@ -539,7 +539,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='generative',
                         choices=list(ALL_MODELS), help='Model to train')
     parser.add_argument('--num_topics', type=int, default=25, help='Number of topics')
-    parser.add_argument('--top_words', type=int, default=20, help='Top words per topic')
+    parser.add_argument('--top_words', type=int, default=10, help='Top words per topic')
     
     # Training arguments
     parser.add_argument('--num_seeds', type=int, default=5, help='Number of random seeds')

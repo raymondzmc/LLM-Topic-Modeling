@@ -103,10 +103,10 @@ class AVITM(AbstractModel):
 
         if self.use_partitions:
             self.model.fit(x_train, x_valid)
-            result = self.inference(x_test)
+            result = self.inference(x_test, top_words=top_words)
         else:
             self.model.fit(x_train, None)
-            result = self.model.get_info()
+            result = self.model.get_info(k=top_words)
         return result
 
     def set_params(self, hyperparameters):
@@ -142,9 +142,9 @@ class AVITM(AbstractModel):
         self.hyperparameters['hidden_sizes'] = tuple(
             [self.hyperparameters["num_neurons"] for _ in range(self.hyperparameters["num_layers"])])
 
-    def inference(self, x_test):
+    def inference(self, x_test, top_words=10):
         assert isinstance(self.use_partitions, bool) and self.use_partitions
-        results = self.model.predict(x_test)
+        results = self.model.predict(x_test, k=top_words)
         return results
 
     def partitioning(self, use_partitions=False):
