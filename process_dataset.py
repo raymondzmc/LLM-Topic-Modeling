@@ -144,7 +144,6 @@ def main(args):
     parquet_files = []
     total_examples = 0
     has_labels = None  # Will be determined from first batch
-    first_label_type = None
     
     # Configure batch accumulation for efficient writes
     write_batch_size = 500  # Write to disk every N examples

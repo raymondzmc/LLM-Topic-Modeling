@@ -5,6 +5,7 @@ import json
 import time
 import argparse
 import random
+import tempfile
 import numpy as np
 import torch
 import wandb
@@ -18,7 +19,7 @@ from octis.models.ETM import ETM
 from bertopic import BERTopic
 from topmost.data import RawDataset
 
-from data.loaders import load_training_data, prepare_octis_files, PROCESSED_DATA_DIR
+from data.loaders import load_training_data, prepare_octis_files
 from models.ctm import CTM as GenerativeTM
 from utils.dataset import get_ctm_dataset_generative
 from utils.metrics import compute_aggregate_results, evaluate_topic_model
@@ -27,12 +28,8 @@ from utils.fastopic_trainer import FASTopicTrainer
 from settings import settings
 
 
-# Models that require processed LLM data (embeddings + logits)
 LLM_MODELS = {'generative'}
-
-# Baseline models that use BOW data
 BASELINE_MODELS = {'lda', 'prodlda', 'zeroshot', 'combined', 'etm', 'bertopic', 'fastopic'}
-
 ALL_MODELS = LLM_MODELS | BASELINE_MODELS
 
 
@@ -48,9 +45,7 @@ def set_seed(seed: int):
 
 def prepare_octis_dataset(data_path: str, bow_corpus: list[list[str]], vocab: list[str]) -> OCTISDataset:
     """Prepare OCTIS dataset format from BOW corpus."""
-    # Ensure OCTIS files exist
     prepare_octis_files(data_path, bow_corpus, vocab)
-    
     dataset = OCTISDataset()
     dataset.load_custom_dataset_from_folder(data_path)
     return dataset
@@ -60,36 +55,19 @@ def train_model(
     model_name: str,
     args: argparse.Namespace,
     seed: int,
-    seed_dir: str,
+    checkpoint_dir: str,
     local_data_path: str,
     vocab: list[str],
     bow_corpus: list[list[str]],
     processed_dataset: dict = None,
     octis_dataset: OCTISDataset = None,
 ) -> dict:
-    """Train a topic model.
-    
-    Args:
-        model_name: Name of the model to train
-        args: Command line arguments
-        seed: Random seed
-        seed_dir: Directory to save seed-specific outputs
-        local_data_path: Path to local data directory
-        vocab: Vocabulary list
-        bow_corpus: Bag of words corpus
-        processed_dataset: Processed dataset for generative models (embeddings + logits)
-        octis_dataset: OCTIS dataset for baseline models
-        
-    Returns:
-        Model output dictionary containing topics and topic-document matrix
-    """
-    # Generative (LLM-based) model
+    """Train a topic model and return output dictionary."""
     if model_name == 'generative':
         if processed_dataset is None:
             raise ValueError("Generative model requires processed_dataset with embeddings and logits")
         
         ctm_dataset = get_ctm_dataset_generative(processed_dataset, vocab)
-        
         model = GenerativeTM(
             input_size=len(vocab),
             bert_input_size=ctm_dataset.X_contextual.shape[1],
@@ -109,12 +87,10 @@ def train_model(
         model.fit(ctm_dataset)
         return model.get_info()
     
-    # LDA
     elif model_name == 'lda':
         model = LDA(num_topics=args.num_topics, random_state=seed)
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
-    # ProdLDA
     elif model_name == 'prodlda':
         model = ProdLDA(
             num_topics=args.num_topics,
@@ -129,7 +105,6 @@ def train_model(
         )
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
-    # CTM (ZeroShot or Combined)
     elif model_name in ['zeroshot', 'combined']:
         model = CTM(
             num_topics=args.num_topics,
@@ -148,7 +123,6 @@ def train_model(
         model.set_seed(seed)
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
-    # ETM
     elif model_name == 'etm':
         word2vec_path = 'word2vec-google-news-300.kv'
         if not os.path.exists(word2vec_path):
@@ -166,10 +140,9 @@ def train_model(
         return model.train_model(
             dataset=octis_dataset,
             top_words=args.top_words,
-            op_path=os.path.join(seed_dir, 'checkpoint.pt'),
+            op_path=os.path.join(checkpoint_dir, 'checkpoint.pt'),
         )
     
-    # BERTopic
     elif model_name == 'bertopic':
         model = BERTopic(
             language='english',
@@ -191,7 +164,6 @@ def train_model(
             'topic-document-matrix': output[1].transpose(),
         }
     
-    # FASTopic
     elif model_name == 'fastopic':
         text_corpus = [' '.join(word_list) for word_list in bow_corpus]
         device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
@@ -217,23 +189,183 @@ def train_model(
         raise ValueError(f"Unknown model: {model_name}")
 
 
+def run_reevaluate(args: argparse.Namespace):
+    """Re-evaluate a model from a previous W&B run."""
+    if args.wandb_project is None:
+        raise ValueError("--wandb_project is required when using --load_run_id_or_name")
+    
+    run_id_or_name = args.load_run_id_or_name
+    wandb_project = args.wandb_project
+    
+    print(f"\n{'='*60}")
+    print(f"Re-evaluating from W&B run: {run_id_or_name}")
+    print(f"Project: {settings.wandb_entity}/{wandb_project}")
+    print(f"{'='*60}\n")
+    
+    api = wandb.Api()
+    
+    # Find run by ID first, then by name
+    source_run = None
+    try:
+        source_run = api.run(f"{settings.wandb_entity}/{wandb_project}/{run_id_or_name}")
+        print(f"Found run by ID: {source_run.name} ({source_run.id})")
+    except wandb.errors.CommError:
+        print(f"Run ID '{run_id_or_name}' not found, searching by name...")
+        runs = api.runs(
+            f"{settings.wandb_entity}/{wandb_project}",
+            filters={"display_name": run_id_or_name},
+            order="-created_at",
+        )
+        runs_list = list(runs)
+        
+        if len(runs_list) == 0:
+            raise ValueError(f"No run found with ID or name: {run_id_or_name}")
+        
+        if len(runs_list) > 1:
+            print(f"⚠️  WARNING: Found {len(runs_list)} runs with name '{run_id_or_name}', using most recent")
+            for i, r in enumerate(runs_list[:5]):
+                print(f"   {i+1}. ID: {r.id}, Created: {r.created_at}")
+        
+        source_run = runs_list[0]
+        print(f"Using run: {source_run.name} ({source_run.id})")
+    
+    # Find model artifact
+    print("\nSearching for model artifact...")
+    artifacts = list(source_run.logged_artifacts())
+    model_artifacts = [a for a in artifacts if a.type == "model"]
+    
+    if len(model_artifacts) == 0:
+        raise ValueError(f"No model artifacts found for run {source_run.id}")
+    
+    artifact = model_artifacts[-1]
+    print(f"Found artifact: {artifact.name} (v{artifact.version})")
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        artifact_dir = artifact.download(root=temp_dir)
+        print(f"Downloaded to: {artifact_dir}")
+        
+        # Load labels
+        labels_path = os.path.join(artifact_dir, 'labels.json')
+        labels = None
+        if os.path.exists(labels_path):
+            with open(labels_path, encoding='utf-8') as f:
+                labels = json.load(f)
+            print(f"Loaded {len(labels)} labels")
+        
+        # Get metadata
+        metadata = artifact.metadata or {}
+        num_seeds = metadata.get('num_seeds', 1)
+        top_words = args.top_words or metadata.get('top_words', 20)
+        model_name = metadata.get('model', 'unknown')
+        dataset_name = metadata.get('dataset', 'unknown')
+        num_topics = metadata.get('num_topics', 0)
+        
+        print(f"\nMetadata: model={model_name}, dataset={dataset_name}, K={num_topics}, seeds={num_seeds}")
+        
+        # Initialize new run
+        new_run = wandb.init(
+            project=wandb_project,
+            entity=settings.wandb_entity,
+            name=f"{model_name}_K{num_topics}_reevaluate",
+            config={
+                "source_run_id": source_run.id,
+                "source_run_name": source_run.name,
+                "model": model_name,
+                "dataset": dataset_name,
+                "num_topics": num_topics,
+                "num_seeds": num_seeds,
+                "top_words": top_words,
+                "reevaluation": True,
+            },
+            mode='online' if not args.wandb_offline else 'offline',
+        )
+        
+        results_dir = os.path.join(temp_dir, 'reevaluated')
+        os.makedirs(results_dir, exist_ok=True)
+        
+        for seed in range(num_seeds):
+            seed_dir = os.path.join(artifact_dir, f"seed_{seed}")
+            new_seed_dir = os.path.join(results_dir, f"seed_{seed}")
+            os.makedirs(new_seed_dir, exist_ok=True)
+            
+            model_output_path = os.path.join(seed_dir, 'model_output.pt')
+            if not os.path.exists(model_output_path):
+                print(f"[Seed {seed}] model_output.pt not found, skipping")
+                continue
+            
+            print(f"[Seed {seed}] Re-evaluating...")
+            model_output = torch.load(model_output_path, weights_only=False)
+            training_time = model_output.get('training_time', 0)
+            
+            # Copy model output
+            torch.save(model_output, os.path.join(new_seed_dir, 'model_output.pt'))
+            
+            # Copy topics
+            if 'topics' in model_output:
+                with open(os.path.join(new_seed_dir, 'topics.json'), 'w', encoding='utf-8') as f:
+                    json.dump(model_output['topics'], f)
+            
+            # Re-evaluate
+            evaluation_results = evaluate_topic_model(
+                model_output,
+                top_words=top_words,
+                test_corpus=None,
+                embeddings=None,
+                labels=labels,
+            )
+            evaluation_results['training_time'] = training_time
+            
+            with open(os.path.join(new_seed_dir, 'evaluation_results.json'), 'w', encoding='utf-8') as f:
+                json.dump(evaluation_results, f)
+            
+            print(f"[Seed {seed}] {evaluation_results}")
+            new_run.log({f"seed_{seed}/{k}": v for k, v in evaluation_results.items()})
+        
+        # Aggregated results
+        averaged_results = compute_aggregate_results(results_dir)
+        with open(os.path.join(results_dir, 'averaged_results.json'), 'w', encoding='utf-8') as f:
+            json.dump(averaged_results, f)
+        
+        # Copy labels and vocab embeddings
+        if labels is not None:
+            with open(os.path.join(results_dir, 'labels.json'), 'w', encoding='utf-8') as f:
+                json.dump(labels, f)
+        
+        new_run.log({f"avg/{k}": v for k, v in averaged_results.items()})
+        print(f"\nAveraged: {averaged_results}")
+        
+        # Upload artifact
+        has_labels = labels is not None
+        new_artifact = wandb.Artifact(
+            name=f"{model_name}-K{num_topics}-{dataset_name}",
+            type="model",
+            description=f"Re-evaluated from {source_run.name} ({source_run.id})",
+            metadata={
+                "model": model_name,
+                "dataset": dataset_name,
+                "num_topics": num_topics,
+                "num_seeds": num_seeds,
+                "top_words": top_words,
+                "has_labels": has_labels,
+                "source_run_id": source_run.id,
+                "reevaluation": True,
+            }
+        )
+        new_artifact.add_dir(results_dir)
+        new_run.log_artifact(new_artifact)
+        new_run.finish()
+        
+        print(f"\n{'='*60}")
+        print("Re-evaluation complete!")
+        print(f"View: https://wandb.ai/{settings.wandb_entity}/{wandb_project}")
+        print(f"{'='*60}")
+
+
 def run(args: argparse.Namespace):
     """Main training and evaluation loop."""
-    # Load training data
     is_generative = args.model in LLM_MODELS
-    training_data = load_training_data(
-        args.data_path,
-        for_generative=is_generative,
-    )
-    
-    # Extract dataset name from local path
+    training_data = load_training_data(args.data_path, for_generative=is_generative)
     dataset_name = os.path.basename(training_data.local_path).split('_')[0]
-    
-    # Determine results path
-    if args.results_path is None:
-        args.results_path = f'results/{dataset_name}/{args.model}_K{args.num_topics}'
-    
-    os.makedirs(args.results_path, exist_ok=True)
     
     # Prepare OCTIS dataset for baseline models
     octis_dataset = None
@@ -257,7 +389,7 @@ def run(args: argparse.Namespace):
     else:
         vocab_embeddings = None
     
-    # Initialize wandb with dataset name as project
+    # Build config
     wandb_project = args.wandb_project if args.wandb_project else dataset_name
     wandb_config = {
         'model': args.model,
@@ -281,7 +413,7 @@ def run(args: argparse.Namespace):
             'temperature': args.temperature,
         })
     
-    run = wandb.init(
+    wb_run = wandb.init(
         project=wandb_project,
         entity=settings.wandb_entity,
         name=f"{args.model}_K{args.num_topics}",
@@ -289,44 +421,23 @@ def run(args: argparse.Namespace):
         mode='online' if not args.wandb_offline else 'offline',
     )
     
-    all_results = []
-    
-    for seed in range(args.num_seeds):
-        set_seed(seed)
-        seed_dir = os.path.join(args.results_path, f"seed_{seed}")
-        os.makedirs(seed_dir, exist_ok=True)
+    # Use temp directory for all outputs (upload to wandb only)
+    with tempfile.TemporaryDirectory() as results_dir:
+        all_results = []
         
-        model_output_path = os.path.join(seed_dir, 'model_output.pt')
-        
-        # Check if model output already exists
-        if os.path.exists(model_output_path):
-            model_output = torch.load(model_output_path, weights_only=False)
-            if model_output.get('topic-document-matrix') is not None:
-                print(f"[Seed {seed}] Loading existing model output from {model_output_path}")
-                training_time = model_output.get('training_time', 0)
-            else:
-                model_output = None
-                training_time = 0
-        else:
-            model_output = None
-            training_time = 0
-        
-        # Train model if needed
-        if model_output is None:
-            if args.eval_only:
-                raise ValueError(
-                    f"Model output does not exist in \"{seed_dir}\" when eval_only is True. "
-                    "Please re-run the script without --eval_only"
-                )
+        for seed in range(args.num_seeds):
+            set_seed(seed)
+            seed_dir = os.path.join(results_dir, f"seed_{seed}")
+            os.makedirs(seed_dir, exist_ok=True)
             
-            print(f"\n[Seed {seed}] Training {args.model} model...")
+            print(f"\n[Seed {seed}] Training {args.model}...")
             start_time = time.time()
             
             model_output = train_model(
                 model_name=args.model,
                 args=args,
                 seed=seed,
-                seed_dir=seed_dir,
+                checkpoint_dir=seed_dir,
                 local_data_path=training_data.local_path,
                 vocab=training_data.vocab,
                 bow_corpus=training_data.bow_corpus,
@@ -336,22 +447,17 @@ def run(args: argparse.Namespace):
             
             training_time = time.time() - start_time
             model_output['training_time'] = training_time
-            
-            print(f"[Seed {seed}] Training completed in {training_time:.2f} seconds")
+            print(f"[Seed {seed}] Trained in {training_time:.2f}s")
             
             # Save model output
-            torch.save(model_output, model_output_path)
-        
-        # Save topics
-        topics_path = os.path.join(seed_dir, 'topics.json')
-        if not os.path.exists(topics_path):
-            with open(topics_path, 'w', encoding='utf-8') as f:
+            torch.save(model_output, os.path.join(seed_dir, 'model_output.pt'))
+            
+            # Save topics
+            with open(os.path.join(seed_dir, 'topics.json'), 'w', encoding='utf-8') as f:
                 json.dump(model_output['topics'], f)
-        
-        # Evaluate model
-        eval_results_path = os.path.join(seed_dir, 'evaluation_results.json')
-        if not os.path.exists(eval_results_path) or args.recompute_metrics:
-            print(f"\n[Seed {seed}] Evaluating model...")
+            
+            # Evaluate
+            print(f"[Seed {seed}] Evaluating...")
             evaluation_results = evaluate_topic_model(
                 model_output,
                 top_words=args.top_words,
@@ -361,97 +467,64 @@ def run(args: argparse.Namespace):
             )
             evaluation_results['training_time'] = training_time
             
-            with open(eval_results_path, 'w', encoding='utf-8') as f:
+            with open(os.path.join(seed_dir, 'evaluation_results.json'), 'w', encoding='utf-8') as f:
                 json.dump(evaluation_results, f)
-        else:
-            with open(eval_results_path, encoding='utf-8') as f:
-                evaluation_results = json.load(f)
+            
+            wb_run.log({f"seed_{seed}/{k}": v for k, v in evaluation_results.items()})
+            all_results.append(evaluation_results)
         
-        # Log to wandb
-        wandb_log = {f"seed_{seed}/{k}": v for k, v in evaluation_results.items()}
-        wandb_log[f"seed_{seed}/training_time"] = training_time
-        run.log(wandb_log)
+        # Aggregated results
+        averaged_results = compute_aggregate_results(results_dir)
+        with open(os.path.join(results_dir, 'averaged_results.json'), 'w', encoding='utf-8') as f:
+            json.dump(averaged_results, f)
         
-        all_results.append(evaluation_results)
-    
-    # Compute and save aggregated results
-    averaged_results = compute_aggregate_results(args.results_path)
-    averaged_results_path = os.path.join(args.results_path, 'averaged_results.json')
-    with open(averaged_results_path, 'w', encoding='utf-8') as f:
-        json.dump(averaged_results, f)
-    
-    # Log averaged results to wandb
-    run.log({f"avg/{k}": v for k, v in averaged_results.items()})
-    
-    # Upload model artifacts before finishing
-    # Artifacts are versioned and run-associated, ideal for large model outputs
-    # 
-    # Files uploaded:
-    #   - seed_{n}/model_output.pt: PyTorch file containing:
-    #       - 'topics': List of K topic word lists (each with top_words words)
-    #       - 'topic-word-matrix': Topic-word distribution (K × vocab_size)
-    #       - 'topic-document-matrix': Doc-topic distribution (K × num_docs)
-    #       - 'training_time': Training duration in seconds
-    #   - seed_{n}/topics.json: Human-readable topic word lists for easy viewing
-    #   - seed_{n}/evaluation_results.json: Evaluation metrics (NPMI, diversity, etc.)
-    #   - averaged_results.json: Aggregated metrics (mean ± std) across all seeds
-    print("\nUploading model artifacts to wandb...")
-    
-    # Create artifact with descriptive metadata
-    artifact_name = f"{args.model}-K{args.num_topics}-{dataset_name}"
-    artifact_description = f"""Topic model outputs for {args.model} on {dataset_name} dataset.
-
-Configuration:
-- Number of topics: {args.num_topics}
-- Top words per topic: {args.top_words}
-- Number of seeds: {args.num_seeds}
-- Training epochs: {args.num_epochs}
-
-Contents per seed:
-- model_output.pt: Full model output (topics, topic-word matrix, doc-topic matrix)
-- topics.json: Topic word lists for easy viewing
-- evaluation_results.json: Coherence, diversity, and clustering metrics
-
-Use averaged_results.json for aggregated metrics across seeds."""
-
-    artifact = wandb.Artifact(
-        name=artifact_name,
-        type="model",
-        description=artifact_description,
-        metadata={
-            "model": args.model,
-            "dataset": dataset_name,
-            "num_topics": args.num_topics,
-            "num_seeds": args.num_seeds,
-            "top_words": args.top_words,
-        }
-    )
-    
-    # Add entire results directory - cleaner than adding files one by one
-    # This preserves the directory structure: seed_0/, seed_1/, ..., averaged_results.json
-    artifact.add_dir(args.results_path)
-    
-    # Calculate total size for logging
-    total_size_mb = sum(
-        os.path.getsize(os.path.join(dirpath, filename))
-        for dirpath, _, filenames in os.walk(args.results_path)
-        for filename in filenames
-    ) / (1024 * 1024)
-    print(f"  Artifact contains {total_size_mb:.2f} MB across {args.num_seeds} seeds")
-    
-    # log_artifact is asynchronous for performant uploads
-    # run.finish() will ensure all pending uploads complete
-    try:
-        run.log_artifact(artifact)
-        print(f"  Artifact '{artifact_name}' queued for async upload")
-    except Exception as e:
-        print(f"  Warning: Failed to queue artifact: {e}")
-    
-    # Finish the run - this uploads remaining data and finalizes syncing
-    run.finish()
-    
-    print(f"\nResults saved to: {args.results_path}")
-    print(f"View run at: https://wandb.ai/{settings.wandb_entity}/{wandb_project}")
+        # Save labels for re-evaluation
+        has_labels = training_data.labels is not None
+        if has_labels:
+            labels_list = training_data.labels
+            if hasattr(labels_list, 'tolist'):
+                labels_list = labels_list.tolist()
+            with open(os.path.join(results_dir, 'labels.json'), 'w', encoding='utf-8') as f:
+                json.dump(labels_list, f)
+        
+        # Save vocab for reproducibility
+        if training_data.vocab is not None:
+            with open(os.path.join(results_dir, 'vocab.json'), 'w', encoding='utf-8') as f:
+                json.dump(training_data.vocab, f)
+        
+        # Save config for reproducibility
+        with open(os.path.join(results_dir, 'config.json'), 'w', encoding='utf-8') as f:
+            json.dump(wandb_config, f)
+        
+        wb_run.log({f"avg/{k}": v for k, v in averaged_results.items()})
+        
+        # Upload artifact
+        print("\nUploading artifact to wandb...")
+        artifact = wandb.Artifact(
+            name=f"{args.model}-K{args.num_topics}-{dataset_name}",
+            type="model",
+            description=f"Topic model: {args.model} on {dataset_name} (K={args.num_topics}, seeds={args.num_seeds})",
+            metadata={
+                "model": args.model,
+                "dataset": dataset_name,
+                "num_topics": args.num_topics,
+                "num_seeds": args.num_seeds,
+                "top_words": args.top_words,
+                "has_labels": has_labels,
+            }
+        )
+        artifact.add_dir(results_dir)
+        
+        total_size_mb = sum(
+            os.path.getsize(os.path.join(dp, fn))
+            for dp, _, fns in os.walk(results_dir) for fn in fns
+        ) / (1024 * 1024)
+        print(f"  Artifact: {total_size_mb:.2f} MB")
+        
+        wb_run.log_artifact(artifact)
+        wb_run.finish()
+        
+        print(f"\nView run: https://wandb.ai/{settings.wandb_entity}/{wandb_project}")
 
 
 if __name__ == '__main__':
@@ -460,57 +533,38 @@ if __name__ == '__main__':
     # Data arguments
     parser.add_argument('--data_path', type=str, required=True,
                         help='Path to data directory or HF repo ID')
-    parser.add_argument('--results_path', type=str, default=None,
-                        help='Path to save results')
     
     # Model arguments
     parser.add_argument('--model', type=str, default='generative',
-                        choices=list(ALL_MODELS),
-                        help='Model to train')
-    parser.add_argument('--num_topics', type=int, default=25,
-                        help='Number of topics')
-    parser.add_argument('--top_words', type=int, default=20,
-                        help='Number of top words per topic')
+                        choices=list(ALL_MODELS), help='Model to train')
+    parser.add_argument('--num_topics', type=int, default=25, help='Number of topics')
+    parser.add_argument('--top_words', type=int, default=20, help='Top words per topic')
     
     # Training arguments
-    parser.add_argument('--num_seeds', type=int, default=5,
-                        help='Number of random seeds to run')
-    parser.add_argument('--num_epochs', type=int, default=100,
-                        help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=64,
-                        help='Batch size')
-    parser.add_argument('--lr', type=float, default=2e-3,
-                        help='Learning rate')
-    parser.add_argument('--hidden_size', type=int, default=200,
-                        help='Hidden layer size')
-    parser.add_argument('--num_hidden_layers', type=int, default=2,
-                        help='Number of hidden layers')
-    parser.add_argument('--activation', type=str, default='softplus',
-                        help='Activation function')
-    parser.add_argument('--solver', type=str, default='adam',
-                        help='Optimizer')
+    parser.add_argument('--num_seeds', type=int, default=5, help='Number of random seeds')
+    parser.add_argument('--num_epochs', type=int, default=100, help='Training epochs')
+    parser.add_argument('--batch_size', type=int, default=64, help='Batch size')
+    parser.add_argument('--lr', type=float, default=2e-3, help='Learning rate')
+    parser.add_argument('--hidden_size', type=int, default=200, help='Hidden layer size')
+    parser.add_argument('--num_hidden_layers', type=int, default=2, help='Hidden layers')
+    parser.add_argument('--activation', type=str, default='softplus', help='Activation')
+    parser.add_argument('--solver', type=str, default='adam', help='Optimizer')
     
-    # Generative model specific arguments
-    parser.add_argument('--loss_weight', type=float, default=1.0,
-                        help='Weight for reconstruction loss (generative only)')
-    parser.add_argument('--sparsity_ratio', type=float, default=1.0,
-                        help='Sparsity ratio for teacher logits (generative only)')
-    parser.add_argument('--loss_type', type=str, default='KL', choices=['KL', 'CE'],
-                        help='Loss type (generative only)')
-    parser.add_argument('--temperature', type=float, default=3.0,
-                        help='Temperature for softmax (generative only)')
-    
-    # Evaluation arguments
-    parser.add_argument('--eval_only', action='store_true',
-                        help='Only evaluate existing models')
-    parser.add_argument('--recompute_metrics', action='store_true',
-                        help='Recompute evaluation metrics')
+    # Generative model arguments
+    parser.add_argument('--loss_weight', type=float, default=1.0, help='Reconstruction loss weight')
+    parser.add_argument('--sparsity_ratio', type=float, default=1.0, help='Sparsity ratio')
+    parser.add_argument('--loss_type', type=str, default='KL', choices=['KL', 'CE'], help='Loss type')
+    parser.add_argument('--temperature', type=float, default=3.0, help='Softmax temperature')
     
     # Wandb arguments
-    parser.add_argument('--wandb_project', type=str, default=None,
-                        help='Wandb project name (default: dataset name)')
-    parser.add_argument('--wandb_offline', action='store_true',
-                        help='Run wandb in offline mode (artifacts will not be uploaded)')
+    parser.add_argument('--wandb_project', type=str, default=None, help='W&B project name')
+    parser.add_argument('--wandb_offline', action='store_true', help='Offline mode')
+    parser.add_argument('--load_run_id_or_name', type=str, default=None,
+                        help='Load from previous W&B run for re-evaluation')
     
     args = parser.parse_args()
-    run(args)
+    
+    if args.load_run_id_or_name:
+        run_reevaluate(args)
+    else:
+        run(args)
