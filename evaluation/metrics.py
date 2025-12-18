@@ -14,12 +14,12 @@ from gensim.models import KeyedVectors
 from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.metrics.cluster import contingency_matrix
 from sklearn import metrics
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def compute_llm_rating(topics: list[list[str]], model: str = "gpt-4o"):
     system_prompt = jinja_template_manager.render("topic_ratings_system.jinja")
-    topic_ratings: list[int] = []
-
+    
     def render_messages(topic: list[str]):
         user_prompt = jinja_template_manager.render(
             "topic_ratings_user.jinja",
@@ -31,35 +31,56 @@ def compute_llm_rating(topics: list[list[str]], model: str = "gpt-4o"):
         ]
         return messages
 
-    client = OpenAI(api_key=settings.openai_api_key)
-    for topic in topics:
+    def get_single_topic_rating(topic):
         messages = render_messages(topic)
+        client = OpenAI(api_key=settings.openai_api_key)
+        
         rating: int | None = None
         temperature: float = 0.0
         num_attempts: int = 0
+        
         while rating is None and num_attempts < 5:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_completion_tokens=1,
-            )
             try:
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_completion_tokens=1,
+                )
                 _rating = int(response.choices[0].message.content)
+                
+                if _rating in [1, 2, 3]:
+                    rating = _rating
+                else:
+                    temperature += 0.1
+                    num_attempts += 1
             except Exception as e:
-                print(f"Error parsing rating for topic \"{topic}\": {e}")
-                continue
-
-            if _rating in [1, 2, 3]:
-                rating = _rating
-            else:
+                print(f"Error for topic \"{topic}\": {e}")
                 temperature += 0.1
                 num_attempts += 1
-
+                
         if rating is None:
             raise ValueError(f"Could not get a valid LLM rating for topic \"{topic}\" after 5 attempts.")
+            
+        return rating
 
-        topic_ratings.append(rating)
+    # Use ThreadPoolExecutor for parallel execution
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        # Submit all tasks
+        future_to_topic = {executor.submit(get_single_topic_rating, topic): i for i, topic in enumerate(topics)}
+        
+        # Collect results ensuring order matches input topics
+        topic_ratings = [None] * len(topics)
+        for future in as_completed(future_to_topic):
+            index = future_to_topic[future]
+            try:
+                rating = future.result()
+                topic_ratings[index] = rating
+            except Exception as exc:
+                print(f'Topic at index {index} generated an exception: {exc}')
+                # Re-raise to match original behavior or handle gracefully
+                raise exc
+
     return topic_ratings
 
 
@@ -262,4 +283,3 @@ def compute_aggregate_results(results_path):
         aggregated_results[k] /= counts[k]
         print(f"[{k}] {aggregated_results[k]} (from {counts[k]} runs)")
     return aggregated_results
-        

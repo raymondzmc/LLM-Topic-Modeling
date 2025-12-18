@@ -366,7 +366,7 @@ def run(args: argparse.Namespace):
     """Main training and evaluation loop."""
     is_generative = args.model in LLM_MODELS
     training_data = load_training_data(args.data_path, for_generative=is_generative)
-    dataset_name = os.path.basename(training_data.local_path).split('_')[0]
+    dataset_name = os.path.basename(training_data.local_path).replace('_processed', '')
     
     # Prepare OCTIS dataset for baseline models
     octis_dataset = None
