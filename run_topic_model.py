@@ -532,7 +532,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train and evaluate topic models")
     
     # Data arguments
-    parser.add_argument('--data_path', type=str, required=True,
+    parser.add_argument('--data_path', type=str, default=None,
                         help='Path to data directory or HF repo ID')
     
     # Model arguments
@@ -568,4 +568,6 @@ if __name__ == '__main__':
     if args.load_run_id_or_name:
         run_reevaluate(args)
     else:
+        if args.data_path is None:
+            parser.error("the following arguments are required: --data_path")
         run(args)
