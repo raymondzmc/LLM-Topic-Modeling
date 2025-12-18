@@ -20,10 +20,11 @@ from models.fastopic import FASTopicTrainer
 from bertopic import BERTopic
 from topmost.data import RawDataset
 from data.loaders import load_training_data, prepare_octis_files
+from data.dataset.ctm_dataset import get_ctm_dataset_from_processed_data
 from models.ctm import CTM as GenerativeTM
-from utils.dataset import get_ctm_dataset_generative
-from utils.embeddings import get_openai_embedding
 from evaluation_metrics.metrics import compute_aggregate_results, evaluate_topic_model
+from utils.embeddings import get_openai_embedding
+
 
 from settings import settings
 
@@ -59,15 +60,15 @@ def train_model(
     local_data_path: str,
     vocab: list[str],
     bow_corpus: list[list[str]],
-    processed_dataset: dict = None,
+    processed_data: dict = None,
     octis_dataset: OCTISDataset = None,
 ) -> dict:
     """Train a topic model and return output dictionary."""
     if model_name == 'generative':
-        if processed_dataset is None:
-            raise ValueError("Generative model requires processed_dataset with embeddings and logits")
+        if processed_data is None:
+            raise ValueError("Generative model requires processed_data with embeddings and logits")
         
-        ctm_dataset = get_ctm_dataset_generative(processed_dataset, vocab)
+        ctm_dataset = get_ctm_dataset_from_processed_data(processed_data, vocab)
         model = GenerativeTM(
             input_size=len(vocab),
             bert_input_size=ctm_dataset.X_contextual.shape[1],

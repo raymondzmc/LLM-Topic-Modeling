@@ -1,7 +1,5 @@
 #!/bin/bash
 # Process datasets for topic modeling
-# pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.7.1/en_core_web_lg-3.7.1-py3-none-any.whl
-# pip install flash-attn --no-build-isolation
 
 # # tweet_topic.tsv with ERNIE-4.5-0.3B-PT
 # python process_dataset.py \
