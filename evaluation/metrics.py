@@ -228,10 +228,10 @@ def evaluate_topic_model(model_output, top_words=10, test_corpus=None, embedding
     #     print("(OpenAI) Word Embeddings:", openai_we_score)
     #     evaluation_results['openai_word_embeddings'] = float(openai_we_score)
 
-    word2vec_we = Word2VecEmbeddingCoherence(top_k=top_words)
-    word2vec_we_score = word2vec_we.score(model_output)
-    print("(Word2Vec) Word Embeddings:", word2vec_we_score)
-    evaluation_results['word2vec_word_embeddings'] = float(word2vec_we_score)
+    # word2vec_we = Word2VecEmbeddingCoherence(top_k=top_words)
+    # word2vec_we_score = word2vec_we.score(model_output)
+    # print("(Word2Vec) Word Embeddings:", word2vec_we_score)
+    # evaluation_results['word2vec_word_embeddings'] = float(word2vec_we_score)
 
     llm_ratings = compute_llm_rating(model_output['topics'])
     llm_average_rating = float(np.mean(llm_ratings))
