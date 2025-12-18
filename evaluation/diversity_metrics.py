@@ -4,10 +4,10 @@ import numpy as np
 import models.octis.configuration.citations as citations
 import gensim.downloader as api
 from gensim.models import KeyedVectors
-from evaluation_metrics.abc import AbstractMetric
-from evaluation_metrics.rbo import rbo
-from evaluation_metrics.word_embeddings_rbo import word_embeddings_rbo
-from evaluation_metrics.word_embeddings_rbo_centroid import word_embeddings_rbo as weirbo_centroid
+from evaluation.abc import AbstractMetric
+from evaluation.rbo import rbo
+from evaluation.word_embeddings_rbo import word_embeddings_rbo
+from evaluation.word_embeddings_rbo_centroid import word_embeddings_rbo as weirbo_centroid
 
 
 class TopicDiversity(AbstractMetric):

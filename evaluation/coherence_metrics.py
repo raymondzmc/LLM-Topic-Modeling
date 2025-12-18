@@ -1,4 +1,4 @@
-from evaluation_metrics.abc import AbstractMetric
+from evaluation.abc import AbstractMetric
 from data.dataset import OCTISDataset
 from gensim.corpora.dictionary import Dictionary
 from gensim.models import CoherenceModel

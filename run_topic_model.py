@@ -22,7 +22,7 @@ from topmost.data import RawDataset
 from data.loaders import load_training_data, prepare_octis_files
 from data.dataset.ctm_dataset import get_ctm_dataset_from_processed_data
 from models.ctm import CTM as GenerativeTM
-from evaluation_metrics.metrics import compute_aggregate_results, evaluate_topic_model
+from evaluation.metrics import compute_aggregate_results, evaluate_topic_model
 from utils.embeddings import get_openai_embedding
 
 
@@ -256,7 +256,7 @@ def run_reevaluate(args: argparse.Namespace):
         # Get metadata
         metadata = artifact.metadata or {}
         num_seeds = metadata.get('num_seeds', 1)
-        top_words = args.top_words or metadata.get('top_words', 10)
+        top_words = args.top_words
         model_name = metadata.get('model', 'unknown')
         dataset_name = metadata.get('dataset', 'unknown')
         num_topics = metadata.get('num_topics', 0)
@@ -532,14 +532,13 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train and evaluate topic models")
     
     # Data arguments
-    parser.add_argument('--data_path', type=str, default=None,
-                        help='Path to data directory or HF repo ID')
+    parser.add_argument('--data_path', type=str, default=None, help='Path to data directory or HF repo ID')
     
     # Model arguments
     parser.add_argument('--model', type=str, default='generative',
                         choices=list(ALL_MODELS), help='Model to train')
     parser.add_argument('--num_topics', type=int, default=25, help='Number of topics')
-    parser.add_argument('--top_words', type=int, default=10, help='Top words per topic')
+    parser.add_argument('--top_words', type=int, default=20, help='Top words per topic')
     
     # Training arguments
     parser.add_argument('--num_seeds', type=int, default=5, help='Number of random seeds')
