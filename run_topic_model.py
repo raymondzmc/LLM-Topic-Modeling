@@ -567,7 +567,7 @@ if __name__ == '__main__':
     
     if args.load_run_id_or_name:
         run_reevaluate(args)
+    elif args.data_path is None:
+        parser.error("the following arguments are required: --data_path")
     else:
-        if args.data_path is None:
-            parser.error("the following arguments are required: --data_path")
         run(args)
