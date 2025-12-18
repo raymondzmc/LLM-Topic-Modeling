@@ -442,7 +442,7 @@ def run(args: argparse.Namespace):
                 local_data_path=training_data.local_path,
                 vocab=training_data.vocab,
                 bow_corpus=training_data.bow_corpus,
-                processed_dataset=training_data.processed_dataset,
+                processed_data=training_data.processed_dataset,
                 octis_dataset=octis_dataset,
             )
             
