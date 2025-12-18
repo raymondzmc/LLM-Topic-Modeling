@@ -1,7 +1,7 @@
 from sklearn.feature_extraction.text import CountVectorizer
 
 from models.octis.abc import AbstractModel
-from models.octis.pytorchavitm import datasets
+from models.octis.pytorchavitm.datasets.bow import BOWDataset
 from models.octis.pytorchavitm.model import AVITM_model
 
 
@@ -163,22 +163,22 @@ class AVITM(AbstractModel):
         vec.fit(entire_dataset)
         idx2token = {v: k for (k, v) in vec.vocabulary_.items()}
         X_train = vec.transform(train)
-        train_data = datasets.BOWDataset(X_train.toarray(), idx2token)
+        train_data = BOWDataset(X_train.toarray(), idx2token)
         input_size = len(idx2token.keys())
 
         if test is not None and validation is not None:
             x_test = vec.transform(test)
-            test_data = datasets.BOWDataset(x_test.toarray(), idx2token)
+            test_data = BOWDataset(x_test.toarray(), idx2token)
             x_valid = vec.transform(validation)
-            valid_data = datasets.BOWDataset(x_valid.toarray(), idx2token)
+            valid_data = BOWDataset(x_valid.toarray(), idx2token)
             return train_data, test_data, valid_data, input_size
         if test is None and validation is not None:
             x_valid = vec.transform(validation)
-            valid_data = datasets.BOWDataset(x_valid.toarray(), idx2token)
+            valid_data = BOWDataset(x_valid.toarray(), idx2token)
             return train_data, valid_data, input_size
         if test is not None and validation is None:
             x_test = vec.transform(test)
-            test_data = datasets.BOWDataset(x_test.toarray(), idx2token)
+            test_data = BOWDataset(x_test.toarray(), idx2token)
             return train_data, test_data, input_size
         if test is None and validation is None:
             return train_data, input_size
