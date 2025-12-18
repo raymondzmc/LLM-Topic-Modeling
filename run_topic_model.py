@@ -281,7 +281,7 @@ def run(args: argparse.Namespace):
             'temperature': args.temperature,
         })
     
-    wandb.init(
+    run = wandb.init(
         project=wandb_project,
         entity=settings.wandb_entity,
         name=f"{args.model}_K{args.num_topics}",
@@ -370,7 +370,7 @@ def run(args: argparse.Namespace):
         # Log to wandb
         wandb_log = {f"seed_{seed}/{k}": v for k, v in evaluation_results.items()}
         wandb_log[f"seed_{seed}/training_time"] = training_time
-        wandb.log(wandb_log)
+        run.log(wandb_log)
         
         all_results.append(evaluation_results)
     
@@ -381,67 +381,77 @@ def run(args: argparse.Namespace):
         json.dump(averaged_results, f)
     
     # Log averaged results to wandb
-    wandb.log({f"avg/{k}": v for k, v in averaged_results.items()})
+    run.log({f"avg/{k}": v for k, v in averaged_results.items()})
     
     # Upload model artifacts before finishing
-    # This allows re-evaluation from wandb later
+    # Artifacts are versioned and run-associated, ideal for large model outputs
+    # 
     # Files uploaded:
-    #   - seed_{n}/model_output.pt: Contains 'topics', 'topic-word-matrix', 'topic-document-matrix'
-    #   - seed_{n}/topics.json: List of topic word lists for easy viewing
-    #   - seed_{n}/evaluation_results.json: All computed evaluation metrics
-    #   - averaged_results.json: Aggregated metrics across all seeds
+    #   - seed_{n}/model_output.pt: PyTorch file containing:
+    #       - 'topics': List of K topic word lists (each with top_words words)
+    #       - 'topic-word-matrix': Topic-word distribution (K × vocab_size)
+    #       - 'topic-document-matrix': Doc-topic distribution (K × num_docs)
+    #       - 'training_time': Training duration in seconds
+    #   - seed_{n}/topics.json: Human-readable topic word lists for easy viewing
+    #   - seed_{n}/evaluation_results.json: Evaluation metrics (NPMI, diversity, etc.)
+    #   - averaged_results.json: Aggregated metrics (mean ± std) across all seeds
     print("\nUploading model artifacts to wandb...")
     
-    run_name = wandb.run.name if wandb.run else "unnamed"
-    run_id = wandb.run.id if wandb.run else "local"
-    clean_run_name = run_name.replace("/", "-").replace(":", "-").replace(" ", "_")
-    artifact_name = f"model_output_{clean_run_name}_{run_id}"
-    
+    # Create artifact with descriptive metadata
+    artifact_name = f"{args.model}-K{args.num_topics}-{dataset_name}"
+    artifact_description = f"""Topic model outputs for {args.model} on {dataset_name} dataset.
+
+Configuration:
+- Number of topics: {args.num_topics}
+- Top words per topic: {args.top_words}
+- Number of seeds: {args.num_seeds}
+- Training epochs: {args.num_epochs}
+
+Contents per seed:
+- model_output.pt: Full model output (topics, topic-word matrix, doc-topic matrix)
+- topics.json: Topic word lists for easy viewing
+- evaluation_results.json: Coherence, diversity, and clustering metrics
+
+Use averaged_results.json for aggregated metrics across seeds."""
+
     artifact = wandb.Artifact(
         name=artifact_name,
-        type="model_output",
-        description=f"Model outputs for {args.model} with {args.num_topics} topics across {args.num_seeds} seeds"
+        type="model",
+        description=artifact_description,
+        metadata={
+            "model": args.model,
+            "dataset": dataset_name,
+            "num_topics": args.num_topics,
+            "num_seeds": args.num_seeds,
+            "top_words": args.top_words,
+        }
     )
     
-    # Add all seed directories
-    for seed in range(args.num_seeds):
-        seed_dir = os.path.join(args.results_path, f"seed_{seed}")
-        model_output_file = os.path.join(seed_dir, 'model_output.pt')
-        topics_file = os.path.join(seed_dir, 'topics.json')
-        eval_results_file = os.path.join(seed_dir, 'evaluation_results.json')
-        
-        # Get file sizes for logging
-        model_size_mb = os.path.getsize(model_output_file) / (1024 * 1024)
-        
-        # Add files with organized names
-        artifact.add_file(model_output_file, name=f"seed_{seed}/model_output.pt")
-        artifact.add_file(topics_file, name=f"seed_{seed}/topics.json")
-        artifact.add_file(eval_results_file, name=f"seed_{seed}/evaluation_results.json")
-        print(f"  Added seed_{seed} files ({model_size_mb:.2f} MB)")
+    # Add entire results directory - cleaner than adding files one by one
+    # This preserves the directory structure: seed_0/, seed_1/, ..., averaged_results.json
+    artifact.add_dir(args.results_path)
     
-    # Add averaged results
-    artifact.add_file(averaged_results_path, name="averaged_results.json")
+    # Calculate total size for logging
+    total_size_mb = sum(
+        os.path.getsize(os.path.join(dirpath, filename))
+        for dirpath, _, filenames in os.walk(args.results_path)
+        for filename in filenames
+    ) / (1024 * 1024)
+    print(f"  Artifact contains {total_size_mb:.2f} MB across {args.num_seeds} seeds")
     
-    # Log the artifact (without aliases to avoid potential issues)
+    # log_artifact is asynchronous for performant uploads
+    # run.finish() will ensure all pending uploads complete
     try:
-        logged_artifact = wandb.log_artifact(artifact)
-        print(f"Artifact '{artifact_name}' queued for upload")
-        # Wait for artifact upload with graceful error handling
-        # wandb will continue retrying in background even if wait() fails
-        try:
-            logged_artifact.wait()
-            print("Artifact upload completed successfully")
-        except Exception as wait_error:
-            print(f"Note: Artifact upload still in progress (wandb will complete in background): {wait_error}")
+        run.log_artifact(artifact)
+        print(f"  Artifact '{artifact_name}' queued for async upload")
     except Exception as e:
-        print(f"Warning: Failed to log artifact: {e}")
+        print(f"  Warning: Failed to queue artifact: {e}")
     
-    # Finish the run (this will complete any pending artifact uploads)
-    wandb.finish()
+    # Finish the run - this uploads remaining data and finalizes syncing
+    run.finish()
+    
     print(f"\nResults saved to: {args.results_path}")
     print(f"View run at: https://wandb.ai/{settings.wandb_entity}/{wandb_project}")
-    
-    print(f"\nResults saved to: {args.results_path}")
 
 
 if __name__ == '__main__':
