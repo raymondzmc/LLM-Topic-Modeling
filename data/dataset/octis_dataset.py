@@ -325,7 +325,7 @@ class OCTISDataset:
             else:
                 self.__metadata = dict()
             df = pd.read_csv(
-                self.dataset_path + "/corpus.tsv", sep='\t', header=None)
+                self.dataset_path + "/corpus.tsv", sep='\t', header=None, quoting=3)
             if len(df.keys()) > 1:
                 # just make sure docs are sorted in the right way (train - val - test)
                 final_df = pd.concat(
@@ -338,16 +338,16 @@ class OCTISDataset:
                     final_df[final_df[1] == 'val']) + len(
                         final_df[final_df[1] == 'train'])
 
-                self.__corpus = [d.split() for d in final_df[0].tolist()]
+                self.__corpus = [str(d).split() for d in final_df[0].tolist()]
                 if len(final_df.keys()) > 2:
                     if multilabel:
                         self.__labels = [
-                            doc.split() for doc in final_df[2].tolist()]
+                            str(doc).split() for doc in final_df[2].tolist()]
                     else:
                         self.__labels = final_df[2].tolist()
 
             else:
-                self.__corpus = [d.split() for d in df[0].tolist()]
+                self.__corpus = [str(d).split() for d in df[0].tolist()]
                 self.__metadata['last-training-doc'] = len(df[0])
 
             if exists(self.dataset_path + "/vocabulary.txt"):
