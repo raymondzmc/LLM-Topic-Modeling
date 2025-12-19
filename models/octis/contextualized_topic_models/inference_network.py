@@ -5,17 +5,17 @@ from torch import nn
 import torch
 import numpy as np
 
+
 class ContextualInferenceNetwork(nn.Module):
 
     """Inference Network."""
 
-    def __init__(self, input_size, bert_size, output_size, hidden_sizes,
-                 activation='softplus', dropout=0.2):
+    def __init__(self, input_size, output_size, hidden_sizes, activation='softplus', dropout=0.2):
         """
         Initialize InferenceNetwork.
 
         Args
-            input_size : int, dimension of input
+            input_size : int, dimension of embedding input
             output_size : int, dimension of output
             hidden_sizes : tuple, length = n_layers
             activation : string, 'softplus' or 'relu', default 'softplus'
@@ -54,8 +54,7 @@ class ContextualInferenceNetwork(nn.Module):
         elif activation == 'selu':
             self.activation = nn.SELU()
 
-        self.input_layer = nn.Linear(input_size+input_size, hidden_sizes[0])
-        self.adapt_bert = nn.Linear(bert_size, hidden_sizes[0])
+        self.input_projection = nn.Linear(input_size, hidden_sizes[0])
 
         self.hiddens = nn.Sequential(OrderedDict([
             ('l_{}'.format(i), nn.Sequential(nn.Linear(h_in, h_out), self.activation))
@@ -70,10 +69,9 @@ class ContextualInferenceNetwork(nn.Module):
         self.dropout_enc = nn.Dropout(p=self.dropout)
 
     def forward(self, x, x_bert):
-        """Forward pass."""
-        x_bert = self.adapt_bert(x_bert)
-
-        x = self.activation(x_bert)
+        """Forward pass: x is ignored to have the same signature as the CombinedInferenceNetwork"""
+        x = self.input_projection(x_bert)
+        x = self.activation(x)
         x = self.hiddens(x)
         x = self.dropout_enc(x)
         mu = self.f_mu_batchnorm(self.f_mu(x))
@@ -92,7 +90,8 @@ class CombinedInferenceNetwork(nn.Module):
         Initialize InferenceNetwork.
 
         Args
-            input_size : int, dimension of input
+            input_size : int, dimension of BoW input
+            bert_size: int, dimension of BERT embedding input
             output_size : int, dimension of output
             hidden_sizes : tuple, length = n_layers
             activation : string, 'softplus' or 'relu', default 'softplus'

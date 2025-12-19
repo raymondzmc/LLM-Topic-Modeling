@@ -10,15 +10,6 @@ import numpy as np
 import torch
 import wandb
 
-from gensim.downloader import load as gensim_load
-from data.dataset import OCTISDataset
-from models.octis.LDA import LDA
-from models.octis.ProdLDA import ProdLDA
-from models.octis.CTM import CTM
-from models.octis.ETM import ETM
-from models.fastopic import FASTopicTrainer
-from bertopic import BERTopic
-from topmost.data import RawDataset
 from data.loaders import load_training_data, prepare_octis_files
 from data.dataset.ctm_dataset import get_ctm_dataset_from_processed_data
 from models.ctm import CTM as GenerativeTM
@@ -44,8 +35,9 @@ def set_seed(seed: int):
     torch.backends.cudnn.deterministic = True
 
 
-def prepare_octis_dataset(data_path: str, bow_corpus: list[list[str]], vocab: list[str]) -> OCTISDataset:
+def prepare_octis_dataset(data_path: str, bow_corpus: list[list[str]], vocab: list[str]):
     """Prepare OCTIS dataset format from BOW corpus."""
+    from data.dataset import OCTISDataset
     prepare_octis_files(data_path, bow_corpus, vocab)
     dataset = OCTISDataset()
     dataset.load_custom_dataset_from_folder(data_path)
@@ -61,7 +53,7 @@ def train_model(
     vocab: list[str],
     bow_corpus: list[list[str]],
     processed_data: dict = None,
-    octis_dataset: OCTISDataset = None,
+    octis_dataset = None,
 ) -> dict:
     """Train a topic model and return output dictionary."""
     if model_name == 'generative':
@@ -70,8 +62,8 @@ def train_model(
         
         ctm_dataset = get_ctm_dataset_from_processed_data(processed_data, vocab)
         model = GenerativeTM(
-            input_size=len(vocab),
-            bert_input_size=ctm_dataset.X_contextual.shape[1],
+            vocab_size=len(vocab),
+            embedding_size=ctm_dataset.x_embeddings.shape[1],
             num_topics=args.num_topics,
             activation=args.activation,
             hidden_sizes=tuple([args.hidden_size] * args.num_hidden_layers),
@@ -89,10 +81,12 @@ def train_model(
         return model.get_info()
     
     elif model_name == 'lda':
+        from models.octis.LDA import LDA
         model = LDA(num_topics=args.num_topics, random_state=seed)
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
     elif model_name == 'prodlda':
+        from models.octis.ProdLDA import ProdLDA
         model = ProdLDA(
             num_topics=args.num_topics,
             batch_size=args.batch_size,
@@ -107,6 +101,7 @@ def train_model(
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
     elif model_name in ['zeroshot', 'combined']:
+        from models.octis.CTM import CTM
         model = CTM(
             num_topics=args.num_topics,
             num_layers=args.num_hidden_layers,
@@ -125,6 +120,8 @@ def train_model(
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
     elif model_name == 'etm':
+        from gensim.downloader import load as gensim_load
+        from models.octis.ETM import ETM
         word2vec_path = 'word2vec-google-news-300.kv'
         if not os.path.exists(word2vec_path):
             word2vec = gensim_load('word2vec-google-news-300')
@@ -145,6 +142,7 @@ def train_model(
         )
     
     elif model_name == 'bertopic':
+        from bertopic import BERTopic
         model = BERTopic(
             language='english',
             top_n_words=args.top_words,
@@ -166,6 +164,8 @@ def train_model(
         }
     
     elif model_name == 'fastopic':
+        from models.fastopic import FASTopicTrainer
+        from topmost.data import RawDataset
         text_corpus = [' '.join(word_list) for word_list in bow_corpus]
         device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         dataset = RawDataset(text_corpus, device=device)
@@ -366,7 +366,25 @@ def run(args: argparse.Namespace):
     """Main training and evaluation loop."""
     is_generative = args.model in LLM_MODELS
     training_data = load_training_data(args.data_path, for_generative=is_generative)
-    dataset_name = os.path.basename(training_data.local_path).replace('_processed', '')
+    
+    # Extract dataset name from metadata if available, otherwise from path
+    if training_data.metadata and 'args' in training_data.metadata and 'dataset' in training_data.metadata['args']:
+        # Get from metadata and extract basename (e.g., 'fancyzhx/dbpedia_14' -> 'dbpedia_14')
+        dataset_name = os.path.basename(training_data.metadata['args']['dataset'])
+        # Remove file extension if present (e.g., '20newsgroups.tsv' -> '20newsgroups')
+        dataset_name = dataset_name.split('.')[0]
+    else:
+        # Fallback: extract from folder name
+        # For names like '20_newsgroups_Llama-3.1-8B-Instruct_vocab_2000_last',
+        # extract everything before the first model/config pattern
+        folder_name = os.path.basename(training_data.local_path)
+        # Common patterns that indicate the start of model/config info
+        for pattern in ['_Llama', '_GPT', '_BERT', '_vocab_', '_processed']:
+            if pattern in folder_name:
+                dataset_name = folder_name.split(pattern)[0]
+                break
+        else:
+            dataset_name = folder_name
     
     # Prepare OCTIS dataset for baseline models
     octis_dataset = None

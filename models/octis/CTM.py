@@ -117,7 +117,7 @@ class CTM(AbstractModel):
                 bert_model=self.hyperparameters["bert_model"])
 
             self.model = CTMModel(
-                input_size=input_size, bert_input_size=x_train.X_bert.shape[1], model_type='prodLDA',
+                input_size=input_size, bert_input_size=x_train.x_embeddings.shape[1], model_type='prodLDA',
                 num_topics=self.hyperparameters['num_topics'], dropout=self.hyperparameters['dropout'],
                 activation=self.hyperparameters['activation'], lr=self.hyperparameters['lr'],
                 inference_type=self.hyperparameters['inference_type'],
@@ -146,7 +146,7 @@ class CTM(AbstractModel):
                 bert_model=self.hyperparameters["bert_model"])
 
         self.model = CTMModel(
-             input_size=input_size, bert_input_size=x_train.X_bert.shape[1], model_type='prodLDA',
+             input_size=input_size, bert_input_size=x_train.x_embeddings.shape[1], model_type='prodLDA',
              num_topics=self.hyperparameters['num_topics'], dropout=self.hyperparameters['dropout'],
              activation=self.hyperparameters['activation'], lr=self.hyperparameters['lr'],
              inference_type=self.hyperparameters['inference_type'],

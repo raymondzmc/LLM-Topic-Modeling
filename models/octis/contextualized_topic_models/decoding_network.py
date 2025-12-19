@@ -57,7 +57,7 @@ class DecoderNetwork(nn.Module):
 
         if infnet == "zeroshot":
             self.inf_net = ContextualInferenceNetwork(
-                input_size, bert_size, n_components, hidden_sizes, activation)
+                bert_size, n_components, hidden_sizes, activation)
         elif infnet == "combined":
             self.inf_net = CombinedInferenceNetwork(
                 input_size, bert_size, n_components, hidden_sizes, activation)
@@ -68,7 +68,6 @@ class DecoderNetwork(nn.Module):
         # init prior parameters
         # \mu_1k = log \alpha_k + 1/K \sum_i log \alpha_i;
         # \alpha = 1 \forall \alpha
-        #self.topic_prior_mean = topic_prior_mean
         self.prior_mean = torch.tensor(
             [topic_prior_mean] * n_components)
         if torch.cuda.is_available():
@@ -102,7 +101,7 @@ class DecoderNetwork(nn.Module):
     @staticmethod
     def reparameterize(mu, logvar):
         """Reparameterize the theta distribution."""
-        std = torch.exp(0.5*logvar)
+        std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
         return eps.mul(std).add_(mu)
 
@@ -139,7 +138,10 @@ class DecoderNetwork(nn.Module):
     def get_theta(self, x, x_bert):
         with torch.no_grad():
             # batch_size x n_components
-            posterior_mu, posterior_log_sigma = self.inf_net(x, x_bert)
+            if self.infnet == "zeroshot":
+                posterior_mu, posterior_log_sigma = self.inf_net(x_bert)
+            else:  # combined
+                posterior_mu, posterior_log_sigma = self.inf_net(x, x_bert)
             posterior_sigma = torch.exp(posterior_log_sigma)
 
             # generate samples from theta
