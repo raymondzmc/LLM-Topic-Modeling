@@ -367,24 +367,15 @@ def run(args: argparse.Namespace):
     is_generative = args.model in LLM_MODELS
     training_data = load_training_data(args.data_path, for_generative=is_generative)
     
-    # Extract dataset name from metadata if available, otherwise from path
-    if training_data.metadata and 'args' in training_data.metadata and 'dataset' in training_data.metadata['args']:
-        # Get from metadata and extract basename (e.g., 'fancyzhx/dbpedia_14' -> 'dbpedia_14')
-        dataset_name = os.path.basename(training_data.metadata['args']['dataset'])
-        # Remove file extension if present (e.g., '20newsgroups.tsv' -> '20newsgroups')
-        dataset_name = dataset_name.split('.')[0]
+    # Extract dataset name from metadata (set during processing)
+    metadata = training_data.metadata or {}
+    original_dataset = metadata.get('args', {}).get('dataset', '')
+    if original_dataset:
+        # Extract basename and remove extension (e.g., 'fancyzhx/dbpedia_14' -> 'dbpedia_14')
+        dataset_name = os.path.basename(original_dataset).split('.')[0]
     else:
-        # Fallback: extract from folder name
-        # For names like '20_newsgroups_Llama-3.1-8B-Instruct_vocab_2000_last',
-        # extract everything before the first model/config pattern
-        folder_name = os.path.basename(training_data.local_path)
-        # Common patterns that indicate the start of model/config info
-        for pattern in ['_Llama', '_GPT', '_BERT', '_vocab_', '_processed']:
-            if pattern in folder_name:
-                dataset_name = folder_name.split(pattern)[0]
-                break
-        else:
-            dataset_name = folder_name
+        # Fallback: use folder name (shouldn't happen with properly processed data)
+        dataset_name = os.path.basename(training_data.local_path)
     
     # Prepare OCTIS dataset for baseline models
     octis_dataset = None
@@ -431,7 +422,7 @@ def run(args: argparse.Namespace):
             'loss_type': args.loss_type,
             'temperature': args.temperature,
         })
-    
+
     wb_run = wandb.init(
         project=wandb_project,
         entity=settings.wandb_entity,
