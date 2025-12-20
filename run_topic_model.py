@@ -112,7 +112,7 @@ def train_model(
             solver=args.solver,
             num_epochs=args.num_epochs,
             inference_type=model_name,
-            bert_path=os.path.join(local_data_path, 'bert'),
+            bert_path=os.path.join(local_data_path, 'stsb-roberta-large'),
             bert_model='stsb-roberta-large',
             use_partitions=False,
         )
@@ -366,8 +366,26 @@ def run(args: argparse.Namespace):
     """Main training and evaluation loop."""
     is_generative = args.model in LLM_MODELS
     training_data = load_training_data(args.data_path, for_generative=is_generative)
-    
+
+    # Slice dataset if limit is provided
+    if args.limit_dataset is not None:
+        print(f"Limiting dataset to first {args.limit_dataset} examples")
+        if is_generative and training_data.processed_dataset is not None:
+            # Handle HF Dataset object
+            from datasets import Dataset
+            if isinstance(training_data.processed_dataset, Dataset):
+                 training_data.processed_dataset = training_data.processed_dataset.select(range(min(len(training_data.processed_dataset), args.limit_dataset)))
+            elif isinstance(training_data.processed_dataset, dict):
+                 # Legacy dict format - only if strict needed, but we prefer Dataset object now
+                 pass
+
+        if training_data.bow_corpus is not None:
+            training_data.bow_corpus = training_data.bow_corpus[:args.limit_dataset]
+            if training_data.labels is not None:
+                training_data.labels = training_data.labels[:args.limit_dataset]
+
     # Extract dataset name from metadata (set during processing)
+
     metadata = training_data.metadata or {}
     original_dataset = metadata.get('args', {}).get('dataset', '')
     if original_dataset:
@@ -570,6 +588,8 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_offline', action='store_true', help='Offline mode')
     parser.add_argument('--load_run_id_or_name', type=str, default=None,
                         help='Load from previous W&B run for re-evaluation')
+    
+    parser.add_argument('--limit_dataset', type=int, default=None, help='Limit dataset size for debugging')
     
     args = parser.parse_args()
     

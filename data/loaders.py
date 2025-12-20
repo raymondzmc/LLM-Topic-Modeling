@@ -284,7 +284,9 @@ def load_training_data(
     labels = list(dataset['label']) if 'label' in dataset.column_names else None
     
     # Create BOW corpus from dataset
-    bow_corpus = [bow.split() for bow in dataset['bow']]
+    from tqdm import tqdm
+    print("Extracting BOW corpus...")
+    bow_corpus = [bow.split() for bow in tqdm(dataset['bow'], desc="Loading BOW")]
     
     # For baseline models, filter out empty documents to avoid OCTIS issues
     if not for_generative:
@@ -299,11 +301,7 @@ def load_training_data(
     # For generative models, also extract embeddings and logits
     processed_dataset = None
     if for_generative:
-        processed_dataset = {
-            'input_embeddings': dataset['input_embeddings'],
-            'next_word_logits': dataset['next_word_logits'],
-            'words': bow_corpus,
-        }
+        processed_dataset = dataset
     
     return TrainingData(
         processed_dataset=processed_dataset,
