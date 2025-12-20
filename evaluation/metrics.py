@@ -2,6 +2,7 @@ import os
 import json
 import itertools
 import numpy as np
+from typing import Optional
 from openai import OpenAI
 from collections import defaultdict
 from settings import settings
@@ -35,7 +36,7 @@ def compute_llm_rating(topics: list[list[str]], model: str = "gpt-4o"):
         messages = render_messages(topic)
         client = OpenAI(api_key=settings.openai_api_key)
         
-        rating: int | None = None
+        rating: Optional[int] = None
         temperature: float = 0.0
         num_attempts: int = 0
         

@@ -167,7 +167,7 @@ def write_batch_to_parquet(
     batch_num: int,
     output_dir: str,
     compression: str = 'snappy'
-) -> str | None:
+) -> Optional[str]:
     """Write a batch of processed examples to a Parquet file.
     
     This function is used for incremental writing during dataset processing

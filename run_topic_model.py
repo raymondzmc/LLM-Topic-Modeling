@@ -113,7 +113,7 @@ def train_model(
             num_epochs=args.num_epochs,
             inference_type=model_name,
             bert_path=os.path.join(local_data_path, 'bert'),
-            bert_model='all-mpnet-base-v2',
+            bert_model='stsb-roberta-large',
             use_partitions=False,
         )
         model.set_seed(seed)

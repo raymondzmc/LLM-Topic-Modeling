@@ -138,10 +138,7 @@ class DecoderNetwork(nn.Module):
     def get_theta(self, x, x_bert):
         with torch.no_grad():
             # batch_size x n_components
-            if self.infnet == "zeroshot":
-                posterior_mu, posterior_log_sigma = self.inf_net(x_bert)
-            else:  # combined
-                posterior_mu, posterior_log_sigma = self.inf_net(x, x_bert)
+            posterior_mu, posterior_log_sigma = self.inf_net(x, x_bert)
             posterior_sigma = torch.exp(posterior_log_sigma)
 
             # generate samples from theta
