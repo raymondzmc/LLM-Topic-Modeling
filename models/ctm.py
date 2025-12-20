@@ -59,11 +59,6 @@ class EncoderDecoderNetwork(torch.nn.Module):
         if topic_prior_variance is None:
             topic_prior_variance = 1. - (1. / self.n_components)
         self.prior_variance = torch.tensor([topic_prior_variance] * n_components)
-
-        if self.learn_priors:
-            self.prior_mean = nn.Parameter(self.prior_mean)
-            self.prior_variance = nn.Parameter(self.prior_variance)
-
         self.beta = torch.Tensor(n_components, vocab_size)
 
         if torch.cuda.is_available():
@@ -75,10 +70,12 @@ class EncoderDecoderNetwork(torch.nn.Module):
         self.beta = nn.Parameter(self.beta)
         nn.init.xavier_uniform_(self.beta)
 
-        self.beta_batchnorm = nn.BatchNorm1d(vocab_size, affine=False)
+        if self.learn_priors:
+            self.prior_mean = nn.Parameter(self.prior_mean)
+            self.prior_variance = nn.Parameter(self.prior_variance)
 
-        # dropout on theta
-        self.drop_theta = nn.Dropout(p=self.dropout)
+        self.beta_batchnorm = nn.BatchNorm1d(vocab_size, affine=False)
+        self.drop_theta = nn.Dropout(p=self.dropout)   # dropout on theta
         self.temperature = temperature
 
     @staticmethod
