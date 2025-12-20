@@ -20,18 +20,18 @@ def bert_embeddings_from_file(text_file, sbert_model_to_load, batch_size=200):
     """
     Creates SBERT Embeddings from an input file
     """
-    model = SentenceTransformer(sbert_model_to_load)
+    model = SentenceTransformer(sbert_model_to_load, trust_remote_code=True)
     with open(text_file, encoding="utf-8") as filino:
         train_text = list(map(lambda x: x, filino.readlines()))
 
     return np.array(model.encode(train_text, show_progress_bar=True, batch_size=batch_size))
 
 
-def bert_embeddings_from_list(texts, sbert_model_to_load="bert-base-nli-mean-tokens", batch_size=100):
+def bert_embeddings_from_list(texts, sbert_model_to_load="bert-base-nli-mean-tokens", batch_size=32):
     """
     Creates SBERT Embeddings from a list
     """
-    model = SentenceTransformer(sbert_model_to_load)
+    model = SentenceTransformer(sbert_model_to_load, trust_remote_code=True)
     return np.array(model.encode(texts, show_progress_bar=True, batch_size=batch_size))
 
 

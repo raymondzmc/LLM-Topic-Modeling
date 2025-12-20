@@ -3,10 +3,44 @@ import json
 import pickle
 from os.path import join, exists
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
 
 from data.dataset.downloader import get_data_home, _pkl_filepath, download_dataset
+
+
+def prepare_octis_dataset(
+    data_path: str,
+    bow_corpus: list[list[str]],
+    vocab: list[str],
+    labels: Optional[list] = None
+):
+    """Prepare OCTIS dataset format from BOW corpus.
+    
+    Filters out empty documents (OCTIS cannot handle them) and creates the
+    necessary files for OCTIS dataset loading.
+    
+    Args:
+        data_path: Directory to save OCTIS files
+        bow_corpus: List of tokenized documents
+        vocab: List of vocabulary words
+        labels: Optional list of labels
+    
+    Returns:
+        Tuple of (octis_dataset, filtered_corpus, filtered_labels) where empty documents are removed.
+    """
+    from data.loaders import prepare_octis_files
+    
+    # Filter out empty documents (OCTIS cannot handle them)
+    non_empty_indices = [i for i, doc in enumerate(bow_corpus) if len(doc) > 0]
+    filtered_corpus = [bow_corpus[i] for i in non_empty_indices]
+    filtered_labels = [labels[i] for i in non_empty_indices] if labels is not None else None
+    
+    prepare_octis_files(data_path, filtered_corpus, vocab, filtered_labels)
+    dataset = OCTISDataset()
+    dataset.load_custom_dataset_from_folder(data_path)
+    return dataset, filtered_corpus, filtered_labels
 
 
 class OCTISDataset:

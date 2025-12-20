@@ -9,8 +9,9 @@ import tempfile
 import numpy as np
 import torch
 import wandb
-
-from data.loaders import load_training_data, prepare_octis_files
+from sentence_transformers import SentenceTransformer
+from data.loaders import load_training_data
+from data.dataset.octis_dataset import prepare_octis_dataset
 from data.dataset.ctm_dataset import get_ctm_dataset_from_processed_data
 from models.ctm import CTM as GenerativeTM
 from evaluation.metrics import compute_aggregate_results, evaluate_topic_model
@@ -35,15 +36,6 @@ def set_seed(seed: int):
     torch.backends.cudnn.deterministic = True
 
 
-def prepare_octis_dataset(data_path: str, bow_corpus: list[list[str]], vocab: list[str]):
-    """Prepare OCTIS dataset format from BOW corpus."""
-    from data.dataset import OCTISDataset
-    prepare_octis_files(data_path, bow_corpus, vocab)
-    dataset = OCTISDataset()
-    dataset.load_custom_dataset_from_folder(data_path)
-    return dataset
-
-
 def train_model(
     model_name: str,
     args: argparse.Namespace,
@@ -52,15 +44,14 @@ def train_model(
     local_data_path: str,
     vocab: list[str],
     bow_corpus: list[list[str]],
-    processed_data: dict = None,
+    ctm_dataset = None,
     octis_dataset = None,
 ) -> dict:
     """Train a topic model and return output dictionary."""
     if model_name == 'generative':
-        if processed_data is None:
-            raise ValueError("Generative model requires processed_data with embeddings and logits")
+        if ctm_dataset is None:
+            raise ValueError("Generative model requires ctm_dataset")
         
-        ctm_dataset = get_ctm_dataset_from_processed_data(processed_data, vocab)
         model = GenerativeTM(
             vocab_size=len(vocab),
             embedding_size=ctm_dataset.x_embeddings.shape[1],
@@ -112,8 +103,8 @@ def train_model(
             solver=args.solver,
             num_epochs=args.num_epochs,
             inference_type=model_name,
-            bert_path=os.path.join(local_data_path, 'stsb-roberta-large'),
-            bert_model='stsb-roberta-large',
+            bert_path=os.path.join(local_data_path, 'gte-large-en-v1.5'),
+            bert_model='Alibaba-NLP/gte-large-en-v1.5',
             use_partitions=False,
         )
         model.set_seed(seed)
@@ -143,6 +134,7 @@ def train_model(
     
     elif model_name == 'bertopic':
         from bertopic import BERTopic
+        embedding_model = SentenceTransformer("Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True)
         model = BERTopic(
             language='english',
             top_n_words=args.top_words,
@@ -150,6 +142,7 @@ def train_model(
             calculate_probabilities=True,
             verbose=True,
             low_memory=False,
+            embedding_model=embedding_model,
         )
         text_corpus = [' '.join(word_list) for word_list in bow_corpus]
         output = model.fit_transform(text_corpus)
@@ -169,10 +162,12 @@ def train_model(
         text_corpus = [' '.join(word_list) for word_list in bow_corpus]
         device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         dataset = RawDataset(text_corpus, device=device)
+        embedding_model = SentenceTransformer("Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True)
         trainer = FASTopicTrainer(
             dataset=dataset,
             num_topics=args.num_topics,
             num_top_words=args.top_words,
+            doc_embed_model=embedding_model,
             low_memory=True,
             low_memory_batch_size=262144,
         )
@@ -367,25 +362,7 @@ def run(args: argparse.Namespace):
     is_generative = args.model in LLM_MODELS
     training_data = load_training_data(args.data_path, for_generative=is_generative)
 
-    # Slice dataset if limit is provided
-    if args.limit_dataset is not None:
-        print(f"Limiting dataset to first {args.limit_dataset} examples")
-        if is_generative and training_data.processed_dataset is not None:
-            # Handle HF Dataset object
-            from datasets import Dataset
-            if isinstance(training_data.processed_dataset, Dataset):
-                 training_data.processed_dataset = training_data.processed_dataset.select(range(min(len(training_data.processed_dataset), args.limit_dataset)))
-            elif isinstance(training_data.processed_dataset, dict):
-                 # Legacy dict format - only if strict needed, but we prefer Dataset object now
-                 pass
-
-        if training_data.bow_corpus is not None:
-            training_data.bow_corpus = training_data.bow_corpus[:args.limit_dataset]
-            if training_data.labels is not None:
-                training_data.labels = training_data.labels[:args.limit_dataset]
-
-    # Extract dataset name from metadata (set during processing)
-
+    octis_data_path = training_data.local_path
     metadata = training_data.metadata or {}
     original_dataset = metadata.get('args', {}).get('dataset', '')
     if original_dataset:
@@ -395,12 +372,31 @@ def run(args: argparse.Namespace):
         # Fallback: use folder name (shouldn't happen with properly processed data)
         dataset_name = os.path.basename(training_data.local_path)
     
+    # Extract model name for generative models (e.g., 'baidu/ERNIE-4.5-0.3B-PT' -> 'ERNIE-4.5-0.3B-PT')
+    model_name_suffix = ""
+    if args.model in LLM_MODELS:
+        original_model_name = metadata.get('args', {}).get('model_name', '')
+        if original_model_name:
+            model_name_suffix = f"_{os.path.basename(original_model_name)}"
+    
     # Prepare OCTIS dataset for baseline models
+    # This also filters empty documents and returns the filtered corpus/labels for evaluation
     octis_dataset = None
+    eval_corpus = training_data.bow_corpus
+    eval_labels = training_data.labels
     if args.model in BASELINE_MODELS:
-        octis_dataset = prepare_octis_dataset(
-            training_data.local_path,
+        octis_dataset, eval_corpus, eval_labels = prepare_octis_dataset(
+            octis_data_path,
             training_data.bow_corpus,
+            training_data.vocab,
+            training_data.labels,
+        )
+    
+    # Pre-compute CTM dataset for generative models (only once, not per seed)
+    ctm_dataset = None
+    if args.model in LLM_MODELS:
+        ctm_dataset = get_ctm_dataset_from_processed_data(
+            training_data.processed_dataset,
             training_data.vocab,
         )
     
@@ -444,7 +440,7 @@ def run(args: argparse.Namespace):
     wb_run = wandb.init(
         project=wandb_project,
         entity=settings.wandb_entity,
-        name=f"{args.model}_K{args.num_topics}",
+        name=f"{args.model}{model_name_suffix}_K{args.num_topics}",
         config=wandb_config,
         mode='online' if not args.wandb_offline else 'offline',
     )
@@ -466,10 +462,10 @@ def run(args: argparse.Namespace):
                 args=args,
                 seed=seed,
                 checkpoint_dir=seed_dir,
-                local_data_path=training_data.local_path,
+                local_data_path=octis_data_path,
                 vocab=training_data.vocab,
                 bow_corpus=training_data.bow_corpus,
-                processed_data=training_data.processed_dataset,
+                ctm_dataset=ctm_dataset,
                 octis_dataset=octis_dataset,
             )
             
@@ -489,9 +485,9 @@ def run(args: argparse.Namespace):
             evaluation_results = evaluate_topic_model(
                 model_output,
                 top_words=args.top_words,
-                test_corpus=training_data.bow_corpus,
+                test_corpus=eval_corpus,
                 embeddings=vocab_embeddings,
-                labels=training_data.labels,
+                labels=eval_labels,
             )
             evaluation_results['training_time'] = training_time
             
@@ -506,10 +502,10 @@ def run(args: argparse.Namespace):
         with open(os.path.join(results_dir, 'averaged_results.json'), 'w', encoding='utf-8') as f:
             json.dump(averaged_results, f)
         
-        # Save labels for re-evaluation
-        has_labels = training_data.labels is not None
+        # Save labels for re-evaluation (use filtered labels to match model output)
+        has_labels = eval_labels is not None
         if has_labels:
-            labels_list = training_data.labels
+            labels_list = eval_labels
             if hasattr(labels_list, 'tolist'):
                 labels_list = labels_list.tolist()
             with open(os.path.join(results_dir, 'labels.json'), 'w', encoding='utf-8') as f:
@@ -588,8 +584,6 @@ if __name__ == '__main__':
     parser.add_argument('--wandb_offline', action='store_true', help='Offline mode')
     parser.add_argument('--load_run_id_or_name', type=str, default=None,
                         help='Load from previous W&B run for re-evaluation')
-    
-    parser.add_argument('--limit_dataset', type=int, default=None, help='Limit dataset size for debugging')
     
     args = parser.parse_args()
     

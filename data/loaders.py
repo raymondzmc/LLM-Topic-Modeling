@@ -223,35 +223,31 @@ def prepare_octis_files(
     filtered_corpus = [bow_corpus[i] for i in non_empty_indices]
     filtered_labels = [labels[i] for i in non_empty_indices] if labels is not None else None
     
-    # Save bow_dataset.txt
+    # Save bow_dataset.txt (always overwrite to handle limit_dataset)
     bow_path = os.path.join(local_path, 'bow_dataset.txt')
-    if not os.path.exists(bow_path):
-        with open(bow_path, 'w', encoding='utf-8') as f:
-            for doc in filtered_corpus:
-                f.write(' '.join(doc) + '\n')
+    with open(bow_path, 'w', encoding='utf-8') as f:
+        for doc in filtered_corpus:
+            f.write(' '.join(doc) + '\n')
     
     # Save vocabulary.txt (OCTIS format)
     vocab_txt_path = os.path.join(local_path, 'vocabulary.txt')
-    if not os.path.exists(vocab_txt_path):
-        with open(vocab_txt_path, 'w', encoding='utf-8') as f:
-            for word in vocab:
-                f.write(f"{word}\n")
+    with open(vocab_txt_path, 'w', encoding='utf-8') as f:
+        for word in vocab:
+            f.write(f"{word}\n")
     
     # Save corpus.tsv (OCTIS format)
     corpus_path = os.path.join(local_path, 'corpus.tsv')
-    if not os.path.exists(corpus_path):
-        with open(corpus_path, 'w', encoding='utf-8', newline='') as f:
-            writer = csv.writer(f, delimiter='\t')
-            for doc in filtered_corpus:
-                writer.writerow([' '.join(doc), 'train', ''])
+    with open(corpus_path, 'w', encoding='utf-8', newline='') as f:
+        writer = csv.writer(f, delimiter='\t')
+        for doc in filtered_corpus:
+            writer.writerow([' '.join(doc), 'train', ''])
     
     # Save labels if available
     if filtered_labels is not None:
         labels_path = os.path.join(local_path, 'numeric_labels.txt')
-        if not os.path.exists(labels_path):
-            with open(labels_path, 'w', encoding='utf-8') as f:
-                for label in filtered_labels:
-                    f.write(f"{label}\n")
+        with open(labels_path, 'w', encoding='utf-8') as f:
+            for label in filtered_labels:
+                f.write(f"{label}\n")
 
 
 def load_training_data(
