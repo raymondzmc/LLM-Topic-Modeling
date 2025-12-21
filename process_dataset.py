@@ -215,7 +215,6 @@ def main(args):
                     processed_example['label'] = example_label
                     if has_labels is None:
                         has_labels = True
-                        first_label_type = type(example_label)
                 elif has_labels is None:
                     has_labels = False
                 

@@ -395,9 +395,19 @@ def run(args: argparse.Namespace):
     # Pre-compute CTM dataset for generative models (only once, not per seed)
     ctm_dataset = None
     if args.model in LLM_MODELS:
+        # Load embedding model for ablation if specified
+        ablation_embedding_model = None
+        if args.ablation_embedding_model:
+            print(f"Loading ablation embedding model: {args.ablation_embedding_model}")
+            ablation_embedding_model = SentenceTransformer(
+                args.ablation_embedding_model, trust_remote_code=True
+            )
+        
         ctm_dataset = get_ctm_dataset_from_processed_data(
             training_data.processed_dataset,
             training_data.vocab,
+            embedding_model=ablation_embedding_model,
+            use_bow_target=args.ablation_use_bow_target,
         )
     
     # Load or compute vocab embeddings for evaluation
@@ -435,12 +445,26 @@ def run(args: argparse.Namespace):
             'sparsity_ratio': args.sparsity_ratio,
             'loss_type': args.loss_type,
             'temperature': args.temperature,
+            'ablation_embedding_model': args.ablation_embedding_model,
+            'ablation_use_bow_target': args.ablation_use_bow_target,
         })
+
+    # Build run name with ablation suffixes
+    run_name = f"{args.model}{model_name_suffix}_K{args.num_topics}"
+    if args.model in LLM_MODELS:
+        if args.ablation_use_bow_target:
+            run_name += "_bow-target"
+        if args.ablation_embedding_model:
+            # Extract short model name (e.g., "gte-large-en-v1.5" from "Alibaba-NLP/gte-large-en-v1.5")
+            ablation_emb_name = os.path.basename(args.ablation_embedding_model)
+            run_name += f"_{ablation_emb_name}"
+        if args.loss_type == 'CE':
+            run_name += "_CE"
 
     wb_run = wandb.init(
         project=wandb_project,
         entity=settings.wandb_entity,
-        name=f"{args.model}{model_name_suffix}_K{args.num_topics}",
+        name=run_name,
         config=wandb_config,
         mode='online' if not args.wandb_offline else 'offline',
     )
@@ -464,7 +488,7 @@ def run(args: argparse.Namespace):
                 checkpoint_dir=seed_dir,
                 local_data_path=octis_data_path,
                 vocab=training_data.vocab,
-                bow_corpus=training_data.bow_corpus,
+                bow_corpus=eval_corpus,  # Use filtered corpus for consistent doc alignment
                 ctm_dataset=ctm_dataset,
                 octis_dataset=octis_dataset,
             )
@@ -578,6 +602,12 @@ if __name__ == '__main__':
     parser.add_argument('--sparsity_ratio', type=float, default=1.0, help='Sparsity ratio')
     parser.add_argument('--loss_type', type=str, default='KL', choices=['KL', 'CE'], help='Loss type')
     parser.add_argument('--temperature', type=float, default=3.0, help='Softmax temperature')
+    
+    # Ablation arguments (generative model only)
+    parser.add_argument('--ablation_embedding_model', type=str, default=None,
+                        help='Use a different SentenceTransformer model for embeddings (ablation)')
+    parser.add_argument('--ablation_use_bow_target', action='store_true',
+                        help='Use BoW as target instead of LLM predictions (ablation)')
     
     # Wandb arguments
     parser.add_argument('--wandb_project', type=str, default=None, help='W&B project name')

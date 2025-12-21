@@ -1,19 +1,33 @@
 {
-  "timestamp": "2025-12-18T03:01:54.414822",
+  "timestamp": "2025-12-21T17:54:45.018890",
   "results": [
     {
-      "model_name": "all-MiniLM-L6-v2",
+      "model_name": "Alibaba-NLP/gte-large-en-v1.5",
       "model_type": "embedding",
-      "model_size_mb": 86.65185546875,
-      "num_documents": 50,
-      "total_time_seconds": 0.35764002799987793,
-      "docs_per_second": 139.80537995041502,
-      "time_per_doc_ms": 7.152800559997559,
+      "model_size_mb": 1664.1719970703125,
+      "num_documents": 200,
+      "total_time_seconds": 20.499840021133423,
+      "docs_per_second": 9.75617369666391,
+      "time_per_doc_ms": 102.49920010566711,
       "batch_size": 32,
       "device": "cpu",
       "gpu_name": null,
       "gpu_memory_mb": null,
       "notes": "Sentence-BERT model used in baseline topic models"
+    },
+    {
+      "model_name": "baidu/ERNIE-4.5-0.3B-PT",
+      "model_type": "llm",
+      "model_size_mb": 1376.144775390625,
+      "num_documents": 200,
+      "total_time_seconds": 21.52934718132019,
+      "docs_per_second": 9.28964535318232,
+      "time_per_doc_ms": 107.64673590660095,
+      "batch_size": 4,
+      "device": "cpu",
+      "gpu_name": null,
+      "gpu_memory_mb": null,
+      "notes": "LLM for next-word logit extraction (our approach)"
     }
   ]
 }

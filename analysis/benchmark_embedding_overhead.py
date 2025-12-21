@@ -15,12 +15,15 @@ import time
 import argparse
 from datetime import datetime
 from typing import Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 import warnings
 
 import numpy as np
 import torch
 from tqdm import tqdm
+
+# Add project root to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Suppress some warnings for cleaner output
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -38,9 +41,25 @@ class BenchmarkResult:
     time_per_doc_ms: float
     batch_size: int
     device: str
+    dataset_name: str = "synthetic"
     gpu_name: Optional[str] = None
     gpu_memory_mb: Optional[float] = None
     notes: str = ""
+
+
+@dataclass
+class DatasetStats:
+    """Container for dataset statistics."""
+    name: str
+    num_documents: int
+    avg_doc_length_chars: float
+    avg_doc_length_words: float
+    min_doc_length_chars: int
+    max_doc_length_chars: int
+    min_doc_length_words: int
+    max_doc_length_words: int
+    num_labels: Optional[int] = None
+    label_distribution: Optional[dict] = None
 
 
 def get_device_info(device: torch.device) -> dict:
@@ -95,11 +114,111 @@ def generate_synthetic_documents(num_docs: int, min_length: int = 50, max_length
     return documents
 
 
+def load_real_datasets(content_key: str = "text") -> dict[str, tuple[list[str], Optional[list]]]:
+    """Load real datasets for benchmarking.
+    
+    Returns:
+        Dictionary mapping dataset name to (documents, labels) tuple
+    """
+    from data.loaders import get_hf_dataset, get_local_dataset
+    
+    datasets = {}
+    
+    # 1. SetFit/20_newsgroups
+    print("\nLoading SetFit/20_newsgroups...")
+    try:
+        ds = get_hf_dataset("SetFit/20_newsgroups", split="train")
+        documents = list(ds[content_key])
+        labels = list(ds["label"]) if "label" in ds.column_names else None
+        datasets["20_newsgroups"] = (documents, labels)
+        print(f"  Loaded {len(documents)} documents")
+    except Exception as e:
+        print(f"  Failed to load 20_newsgroups: {e}")
+    
+    # 2. stackoverflow.tsv (local)
+    print("\nLoading stackoverflow.tsv...")
+    try:
+        stackoverflow_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "data", "raw_data", "stackoverflow.tsv"
+        )
+        ds = get_local_dataset(stackoverflow_path)
+        documents = list(ds[content_key])
+        labels = list(ds["label"]) if "label" in ds.column_names else None
+        datasets["stackoverflow"] = (documents, labels)
+        print(f"  Loaded {len(documents)} documents")
+    except Exception as e:
+        print(f"  Failed to load stackoverflow: {e}")
+    
+    # 3. tweet_topic.tsv (local)
+    print("\nLoading tweet_topic.tsv...")
+    try:
+        tweet_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "data", "raw_data", "tweet_topic.tsv"
+        )
+        ds = get_local_dataset(tweet_path)
+        documents = list(ds[content_key])
+        labels = list(ds["label"]) if "label" in ds.column_names else None
+        datasets["tweet_topic"] = (documents, labels)
+        print(f"  Loaded {len(documents)} documents")
+    except Exception as e:
+        print(f"  Failed to load tweet_topic: {e}")
+    
+    return datasets
+
+
+def compute_dataset_stats(name: str, documents: list[str], labels: Optional[list] = None) -> DatasetStats:
+    """Compute statistics for a dataset."""
+    doc_lengths_chars = [len(doc) for doc in documents]
+    doc_lengths_words = [len(doc.split()) for doc in documents]
+    
+    label_dist = None
+    num_labels = None
+    if labels is not None:
+        from collections import Counter
+        label_counts = Counter(labels)
+        num_labels = len(label_counts)
+        label_dist = dict(label_counts)
+    
+    return DatasetStats(
+        name=name,
+        num_documents=len(documents),
+        avg_doc_length_chars=np.mean(doc_lengths_chars),
+        avg_doc_length_words=np.mean(doc_lengths_words),
+        min_doc_length_chars=min(doc_lengths_chars),
+        max_doc_length_chars=max(doc_lengths_chars),
+        min_doc_length_words=min(doc_lengths_words),
+        max_doc_length_words=max(doc_lengths_words),
+        num_labels=num_labels,
+        label_distribution=label_dist,
+    )
+
+
+def print_dataset_stats(stats_list: list[DatasetStats]):
+    """Print dataset statistics in a formatted table."""
+    print("\n" + "="*100)
+    print("DATASET STATISTICS")
+    print("="*100)
+    
+    header = f"{'Dataset':<20} {'# Docs':<10} {'Avg Chars':<12} {'Avg Words':<12} {'Min Words':<12} {'Max Words':<12} {'# Labels':<10}"
+    print(header)
+    print("-"*100)
+    
+    for stats in stats_list:
+        num_labels_str = str(stats.num_labels) if stats.num_labels else "N/A"
+        row = f"{stats.name:<20} {stats.num_documents:<10} {stats.avg_doc_length_chars:<12.1f} {stats.avg_doc_length_words:<12.1f} {stats.min_doc_length_words:<12} {stats.max_doc_length_words:<12} {num_labels_str:<10}"
+        print(row)
+    
+    print("="*100)
+
+
 def benchmark_sentence_transformer(
     model_name: str,
     documents: list[str],
     batch_size: int = 32,
-    device: str = "cuda"
+    device: str = "cuda",
+    dataset_name: str = "synthetic"
 ) -> BenchmarkResult:
     """Benchmark Sentence-BERT embedding model."""
     from sentence_transformers import SentenceTransformer
@@ -109,6 +228,7 @@ def benchmark_sentence_transformer(
     
     print(f"\n{'='*60}")
     print(f"Benchmarking Sentence-BERT: {model_name}")
+    print(f"Dataset: {dataset_name}")
     print(f"Device: {device_info}")
     print(f"Documents: {len(documents)}, Batch size: {batch_size}")
     print(f"{'='*60}")
@@ -116,7 +236,7 @@ def benchmark_sentence_transformer(
     # Load model
     print("Loading model...")
     load_start = time.time()
-    model = SentenceTransformer(model_name, device=str(device_obj))
+    model = SentenceTransformer(model_name, device=str(device_obj), trust_remote_code=True)
     load_time = time.time() - load_start
     print(f"Model loaded in {load_time:.2f}s")
     
@@ -154,6 +274,7 @@ def benchmark_sentence_transformer(
         time_per_doc_ms=(total_time / len(documents)) * 1000,
         batch_size=batch_size,
         device=str(device_obj),
+        dataset_name=dataset_name,
         gpu_name=device_info.get("gpu_name"),
         gpu_memory_mb=gpu_memory,
         notes=f"Sentence-BERT model used in baseline topic models"
@@ -174,6 +295,7 @@ def benchmark_llm(
     device: str = "cuda",
     max_length: int = 512,
     vocab_size_to_extract: int = 2000,
+    dataset_name: str = "synthetic"
 ) -> BenchmarkResult:
     """Benchmark LLM for next-word logit extraction (our approach)."""
     from transformers import AutoTokenizer, AutoModelForCausalLM
@@ -183,6 +305,7 @@ def benchmark_llm(
     
     print(f"\n{'='*60}")
     print(f"Benchmarking LLM: {model_name}")
+    print(f"Dataset: {dataset_name}")
     print(f"Device: {device_info}")
     print(f"Documents: {len(documents)}, Batch size: {batch_size}")
     print(f"{'='*60}")
@@ -218,6 +341,8 @@ def benchmark_llm(
     print(f"Model loaded in {load_time:.2f}s")
     
     model_size = estimate_model_size_mb(model)
+    num_params = count_parameters(model)
+    print(f"Model size: {model_size:.1f} MB, Parameters: {num_params / 1e9:.2f}B")
     
     # Create a simple prompt template
     def create_prompt(doc: str) -> str:
@@ -295,9 +420,10 @@ def benchmark_llm(
         time_per_doc_ms=(total_time / len(documents)) * 1000,
         batch_size=batch_size,
         device=str(device_obj),
+        dataset_name=dataset_name,
         gpu_name=device_info.get("gpu_name"),
         gpu_memory_mb=gpu_memory,
-        notes=f"LLM for next-word logit extraction (our approach)"
+        notes=f"LLM for next-word logit extraction (our approach), {num_params / 1e9:.2f}B params"
     )
     
     # Cleanup
@@ -308,75 +434,141 @@ def benchmark_llm(
     return result
 
 
-def print_results_table(results: list[BenchmarkResult]):
+def print_results_table(results: list[BenchmarkResult], dataset_name: str = None):
     """Print results in a formatted table."""
-    print("\n" + "="*100)
-    print("BENCHMARK RESULTS SUMMARY")
-    print("="*100)
+    # Filter results by dataset if specified
+    if dataset_name:
+        results = [r for r in results if r.dataset_name == dataset_name]
+    
+    if not results:
+        print("No results to display.")
+        return
+    
+    print("\n" + "="*120)
+    if dataset_name:
+        print(f"BENCHMARK RESULTS - Dataset: {dataset_name}")
+    else:
+        print("BENCHMARK RESULTS SUMMARY (All Datasets)")
+    print("="*120)
     
     # Header
-    header = f"{'Model':<45} {'Type':<10} {'Size(MB)':<10} {'Time(s)':<10} {'Docs/s':<10} {'ms/doc':<10}"
+    header = f"{'Model':<45} {'Dataset':<15} {'Type':<10} {'Size(MB)':<10} {'Time(s)':<10} {'Docs/s':<10} {'ms/doc':<10}"
     print(header)
-    print("-"*100)
+    print("-"*120)
     
-    # Sort by model type and then by speed
-    sorted_results = sorted(results, key=lambda x: (x.model_type, -x.docs_per_second))
+    # Sort by dataset, model type, and then by speed
+    sorted_results = sorted(results, key=lambda x: (x.dataset_name, x.model_type, -x.docs_per_second))
     
     current_type = None
+    current_dataset = None
     for r in sorted_results:
+        if r.dataset_name != current_dataset:
+            if current_dataset is not None:
+                print()
+            current_dataset = r.dataset_name
+            current_type = None
+            print(f"\n--- Dataset: {current_dataset} ({r.num_documents} documents) ---")
+            print("-"*120)
+        
         if r.model_type != current_type:
-            if current_type is not None:
-                print("-"*100)
             current_type = r.model_type
             type_label = "EMBEDDING MODELS (Baselines)" if current_type == "embedding" else "LLM MODELS (Our Approach)"
-            print(f"\n{type_label}")
-            print("-"*100)
+            print(f"\n  {type_label}")
         
-        row = f"{r.model_name:<45} {r.model_type:<10} {r.model_size_mb:<10.1f} {r.total_time_seconds:<10.2f} {r.docs_per_second:<10.1f} {r.time_per_doc_ms:<10.2f}"
+        row = f"  {r.model_name:<43} {r.dataset_name:<15} {r.model_type:<10} {r.model_size_mb:<10.1f} {r.total_time_seconds:<10.2f} {r.docs_per_second:<10.1f} {r.time_per_doc_ms:<10.2f}"
         print(row)
     
-    print("="*100)
+    print("="*120)
+
+
+def print_overhead_comparison(results: list[BenchmarkResult]):
+    """Print overhead comparison between embedding and LLM models."""
+    # Group results by dataset
+    datasets = set(r.dataset_name for r in results)
     
-    # Compute speedup comparison
-    embedding_results = [r for r in results if r.model_type == "embedding"]
-    llm_results = [r for r in results if r.model_type == "llm"]
+    print("\n" + "="*120)
+    print("OVERHEAD COMPARISON BY DATASET")
+    print("="*120)
     
-    if embedding_results and llm_results:
-        print("\n" + "="*100)
-        print("OVERHEAD COMPARISON")
-        print("="*100)
+    for dataset_name in sorted(datasets):
+        dataset_results = [r for r in results if r.dataset_name == dataset_name]
+        embedding_results = [r for r in dataset_results if r.model_type == "embedding"]
+        llm_results = [r for r in dataset_results if r.model_type == "llm"]
         
-        # Find the fastest embedding model (typically used baseline)
+        if not embedding_results or not llm_results:
+            continue
+        
+        print(f"\n--- Dataset: {dataset_name} ---")
+        print("-"*80)
+        
+        # Find the fastest embedding model
         fastest_embedding = min(embedding_results, key=lambda x: x.time_per_doc_ms)
-        # Find the smallest/fastest LLM (ERNIE-0.3B)
-        fastest_llm = min(llm_results, key=lambda x: x.time_per_doc_ms)
         
         print(f"\nFastest baseline embedding: {fastest_embedding.model_name}")
         print(f"  - {fastest_embedding.time_per_doc_ms:.2f} ms/doc ({fastest_embedding.docs_per_second:.1f} docs/s)")
         
-        print(f"\nFastest LLM (Our approach): {fastest_llm.model_name}")
-        print(f"  - {fastest_llm.time_per_doc_ms:.2f} ms/doc ({fastest_llm.docs_per_second:.1f} docs/s)")
-        
-        overhead_ratio = fastest_llm.time_per_doc_ms / fastest_embedding.time_per_doc_ms
-        print(f"\nOverhead ratio (LLM / Embedding): {overhead_ratio:.2f}x")
+        print(f"\nLLM Models (Our Approach):")
+        for llm_r in sorted(llm_results, key=lambda x: x.time_per_doc_ms):
+            overhead_ratio = llm_r.time_per_doc_ms / fastest_embedding.time_per_doc_ms
+            print(f"  - {llm_r.model_name}")
+            print(f"    {llm_r.time_per_doc_ms:.2f} ms/doc ({llm_r.docs_per_second:.1f} docs/s)")
+            print(f"    Overhead ratio vs fastest embedding: {overhead_ratio:.2f}x")
         
         # Compare with commonly used all-mpnet-base-v2 (used in ZeroShotTM)
         mpnet_results = [r for r in embedding_results if "mpnet-base" in r.model_name.lower()]
         if mpnet_results:
             mpnet = mpnet_results[0]
-            print(f"\n\nComparison with ZeroShotTM's default (all-mpnet-base-v2):")
-            print(f"  - {mpnet.model_name}: {mpnet.time_per_doc_ms:.2f} ms/doc")
-            for llm_r in llm_results:
+            print(f"\n  Comparison with ZeroShotTM's default (all-mpnet-base-v2):")
+            print(f"    {mpnet.model_name}: {mpnet.time_per_doc_ms:.2f} ms/doc")
+            for llm_r in sorted(llm_results, key=lambda x: x.time_per_doc_ms):
                 ratio = llm_r.time_per_doc_ms / mpnet.time_per_doc_ms
-                print(f"  - {llm_r.model_name}: {llm_r.time_per_doc_ms:.2f} ms/doc ({ratio:.2f}x overhead)")
-        
-        print("="*100)
+                print(f"    {llm_r.model_name}: {llm_r.time_per_doc_ms:.2f} ms/doc ({ratio:.2f}x overhead)")
+    
+    print("\n" + "="*120)
 
 
-def save_results(results: list[BenchmarkResult], output_path: str):
+def print_cross_dataset_summary(results: list[BenchmarkResult]):
+    """Print summary statistics across all datasets."""
+    print("\n" + "="*120)
+    print("CROSS-DATASET SUMMARY")
+    print("="*120)
+    
+    # Group by model
+    models = set(r.model_name for r in results)
+    
+    print(f"\n{'Model':<50} {'Avg ms/doc':<12} {'Std ms/doc':<12} {'Avg Docs/s':<12} {'Datasets':<10}")
+    print("-"*120)
+    
+    # Embedding models first
+    print("\nEMBEDDING MODELS:")
+    embedding_models = set(r.model_name for r in results if r.model_type == "embedding")
+    for model in sorted(embedding_models):
+        model_results = [r for r in results if r.model_name == model]
+        avg_time = np.mean([r.time_per_doc_ms for r in model_results])
+        std_time = np.std([r.time_per_doc_ms for r in model_results])
+        avg_throughput = np.mean([r.docs_per_second for r in model_results])
+        num_datasets = len(model_results)
+        print(f"  {model:<48} {avg_time:<12.2f} {std_time:<12.2f} {avg_throughput:<12.1f} {num_datasets:<10}")
+    
+    # LLM models
+    print("\nLLM MODELS:")
+    llm_models = set(r.model_name for r in results if r.model_type == "llm")
+    for model in sorted(llm_models):
+        model_results = [r for r in results if r.model_name == model]
+        avg_time = np.mean([r.time_per_doc_ms for r in model_results])
+        std_time = np.std([r.time_per_doc_ms for r in model_results])
+        avg_throughput = np.mean([r.docs_per_second for r in model_results])
+        num_datasets = len(model_results)
+        print(f"  {model:<48} {avg_time:<12.2f} {std_time:<12.2f} {avg_throughput:<12.1f} {num_datasets:<10}")
+    
+    print("="*120)
+
+
+def save_results(results: list[BenchmarkResult], dataset_stats: list[DatasetStats], output_path: str):
     """Save results to JSON file."""
     output = {
         "timestamp": datetime.now().isoformat(),
+        "dataset_stats": [asdict(s) for s in dataset_stats],
         "results": [asdict(r) for r in results]
     }
     
@@ -391,8 +583,8 @@ def main():
         description="Benchmark embedding overhead for topic model preprocessing"
     )
     parser.add_argument(
-        "--num_docs", type=int, default=1000,
-        help="Number of synthetic documents to benchmark"
+        "--num_docs", type=int, default=None,
+        help="Number of documents to benchmark (None = use all available)"
     )
     parser.add_argument(
         "--batch_size_embedding", type=int, default=32,
@@ -419,6 +611,14 @@ def main():
         help="Skip embedding benchmarks (only run LLM models)"
     )
     parser.add_argument(
+        "--use_synthetic", action="store_true",
+        help="Use synthetic data instead of real datasets"
+    )
+    parser.add_argument(
+        "--synthetic_num_docs", type=int, default=1000,
+        help="Number of synthetic documents (only used with --use_synthetic)"
+    )
+    parser.add_argument(
         "--embedding_models", type=str, nargs="+",
         default=[
             "all-mpnet-base-v2",      # Used by ZeroShotTM/CombinedTM (109M params)
@@ -431,11 +631,15 @@ def main():
     parser.add_argument(
         "--llm_models", type=str, nargs="+",
         default=[
-            "baidu/ERNIE-4.5-0.3B-PT",        # Our smallest model (0.3B)
-            # "meta-llama/Llama-3.2-1B-Instruct",  # Medium model (1B) - uncomment if available
-            # "meta-llama/Llama-3.1-8B-Instruct",  # Larger model (8B) - uncomment if available
+            "baidu/ERNIE-4.5-0.3B-PT",           # Our smallest model (0.3B)
+            "meta-llama/Llama-3.2-1B-Instruct",  # Llama 1B
+            "meta-llama/Llama-3.1-8B-Instruct",  # Llama 8B
         ],
         help="LLM models to benchmark"
+    )
+    parser.add_argument(
+        "--content_key", type=str, default="text",
+        help="Key for document content in datasets"
     )
     
     args = parser.parse_args()
@@ -445,71 +649,101 @@ def main():
         print("CUDA not available, falling back to CPU")
         args.device = "cpu"
     
-    print(f"\n{'#'*60}")
+    print(f"\n{'#'*80}")
     print(f"# EMBEDDING OVERHEAD BENCHMARK")
     print(f"# Date: {datetime.now().isoformat()}")
-    print(f"# Documents: {args.num_docs}")
     print(f"# Device: {args.device}")
     if args.device == "cuda":
         print(f"# GPU: {torch.cuda.get_device_name(0)}")
-    print(f"{'#'*60}")
+        print(f"# GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+    print(f"{'#'*80}")
     
-    # Generate synthetic documents
-    print("\nGenerating synthetic documents...")
-    documents = generate_synthetic_documents(args.num_docs)
-    print(f"Generated {len(documents)} documents")
-    print(f"Sample document: {documents[0][:100]}...")
+    # Load datasets
+    all_dataset_stats = []
+    if args.use_synthetic:
+        print("\nUsing synthetic documents...")
+        documents = generate_synthetic_documents(args.synthetic_num_docs)
+        datasets = {"synthetic": (documents, None)}
+        stats = compute_dataset_stats("synthetic", documents)
+        all_dataset_stats.append(stats)
+    else:
+        print("\nLoading real datasets...")
+        datasets = load_real_datasets(args.content_key)
+        
+        for name, (docs, labels) in datasets.items():
+            stats = compute_dataset_stats(name, docs, labels)
+            all_dataset_stats.append(stats)
+    
+    # Print dataset statistics
+    print_dataset_stats(all_dataset_stats)
+    
+    # Limit documents if specified
+    if args.num_docs is not None:
+        print(f"\nLimiting to {args.num_docs} documents per dataset")
+        datasets = {
+            name: (docs[:args.num_docs], labels[:args.num_docs] if labels else None)
+            for name, (docs, labels) in datasets.items()
+        }
     
     results = []
     
-    # Benchmark embedding models (baselines)
-    if not args.skip_embedding:
-        print("\n" + "#"*60)
-        print("# BENCHMARKING EMBEDDING MODELS (Used in Baselines)")
-        print("#"*60)
+    # Run benchmarks for each dataset
+    for dataset_name, (documents, labels) in datasets.items():
+        print(f"\n{'#'*80}")
+        print(f"# BENCHMARKING ON DATASET: {dataset_name} ({len(documents)} documents)")
+        print(f"{'#'*80}")
         
-        for model_name in args.embedding_models:
-            try:
-                result = benchmark_sentence_transformer(
-                    model_name=model_name,
-                    documents=documents,
-                    batch_size=args.batch_size_embedding,
-                    device=args.device
-                )
-                results.append(result)
-                print(f"✓ {model_name}: {result.docs_per_second:.1f} docs/s")
-            except Exception as e:
-                print(f"✗ {model_name}: Failed - {e}")
-    
-    # Benchmark LLM models (our approach)
-    if not args.skip_llm:
-        print("\n" + "#"*60)
-        print("# BENCHMARKING LLM MODELS (Our Approach)")
-        print("#"*60)
+        # Benchmark embedding models (baselines)
+        if not args.skip_embedding:
+            print("\n" + "#"*60)
+            print("# BENCHMARKING EMBEDDING MODELS (Used in Baselines)")
+            print("#"*60)
+            
+            for model_name in args.embedding_models:
+                try:
+                    result = benchmark_sentence_transformer(
+                        model_name=model_name,
+                        documents=documents,
+                        batch_size=args.batch_size_embedding,
+                        device=args.device,
+                        dataset_name=dataset_name
+                    )
+                    results.append(result)
+                    print(f"✓ {model_name}: {result.docs_per_second:.1f} docs/s")
+                except Exception as e:
+                    print(f"✗ {model_name}: Failed - {e}")
         
-        for model_name in args.llm_models:
-            try:
-                result = benchmark_llm(
-                    model_name=model_name,
-                    documents=documents,
-                    batch_size=args.batch_size_llm,
-                    device=args.device
-                )
-                results.append(result)
-                print(f"✓ {model_name}: {result.docs_per_second:.1f} docs/s")
-            except Exception as e:
-                print(f"✗ {model_name}: Failed - {e}")
-                import traceback
-                traceback.print_exc()
+        # Benchmark LLM models (our approach)
+        if not args.skip_llm:
+            print("\n" + "#"*60)
+            print("# BENCHMARKING LLM MODELS (Our Approach)")
+            print("#"*60)
+            
+            for model_name in args.llm_models:
+                try:
+                    result = benchmark_llm(
+                        model_name=model_name,
+                        documents=documents,
+                        batch_size=args.batch_size_llm,
+                        device=args.device,
+                        dataset_name=dataset_name
+                    )
+                    results.append(result)
+                    print(f"✓ {model_name}: {result.docs_per_second:.1f} docs/s")
+                except Exception as e:
+                    print(f"✗ {model_name}: Failed - {e}")
+                    import traceback
+                    traceback.print_exc()
     
     # Print and save results
     if results:
         print_results_table(results)
-        save_results(results, args.output)
+        print_overhead_comparison(results)
+        print_cross_dataset_summary(results)
+        save_results(results, all_dataset_stats, args.output)
     else:
         print("\nNo successful benchmarks to report.")
 
 
 if __name__ == "__main__":
     main()
-

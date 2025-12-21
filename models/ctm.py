@@ -276,10 +276,10 @@ class CTM(object):
         mask = torch.zeros_like(teacher_logits)
         mask.scatter_(1, topk_indices, 1.0)
         teacher_logits = teacher_logits * mask
-        teacher_probs = torch.softmax(teacher_logits / self.temperature, dim=-1)
         if self.loss_type == 'CE':
-            RL =  -torch.sum(teacher_probs * torch.log(student_probs + 1e-10), dim=1)
+            RL =  -torch.sum(teacher_logits * torch.log(student_probs + 1e-10), dim=1)
         elif self.loss_type == 'KL':
+            teacher_probs = torch.softmax(teacher_logits / self.temperature, dim=-1)
             teacher_probs = teacher_probs.clamp_min(1e-9)
             student_probs = student_probs.clamp_min(1e-9)
             RL = torch.sum(teacher_probs * torch.log(teacher_probs / student_probs), dim=1)
