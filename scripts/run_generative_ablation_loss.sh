@@ -12,14 +12,14 @@ datasets=(
 )
 
 models=(
-    "Llama-3.1-8B-Instruct"
     "ERNIE-4.5-0.3B-PT"
+    "Llama-3.1-8B-Instruct"
     "Llama-3.2-1B-Instruct"
 )
 
-for dataset in "${datasets[@]}"
+for model in "${models[@]}"
 do
-    for model in "${models[@]}"
+    for dataset in "${datasets[@]}"
     do
         # Construct full dataset path/name
         DATA_PATH="raymondzmc/${dataset}_${model}_vocab_2000_last"

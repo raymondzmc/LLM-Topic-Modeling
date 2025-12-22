@@ -12,8 +12,8 @@ datasets=(
 )
 
 models=(
-    "Llama-3.1-8B-Instruct"
     "ERNIE-4.5-0.3B-PT"
+    "Llama-3.1-8B-Instruct"
     "Llama-3.2-1B-Instruct"
 )
 
@@ -21,9 +21,9 @@ models=(
 echo "=========================================="
 echo "ABLATION 2: GTE Embedding Model"
 echo "=========================================="
-for dataset in "${datasets[@]}"
+for model in "${models[@]}"
 do
-    for model in "${models[@]}"
+    for dataset in "${datasets[@]}"
     do
         DATA_PATH="raymondzmc/${dataset}_${model}_vocab_2000_last"
         
