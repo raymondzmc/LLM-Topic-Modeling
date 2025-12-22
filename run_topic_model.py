@@ -585,7 +585,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='generative',
                         choices=list(ALL_MODELS), help='Model to train')
     parser.add_argument('--num_topics', type=int, default=25, help='Number of topics')
-    parser.add_argument('--top_words', type=int, default=20, help='Top words per topic')
+    parser.add_argument('--top_words', type=int, default=10, help='Top words per topic')
     
     # Training arguments
     parser.add_argument('--num_seeds', type=int, default=5, help='Number of random seeds')
@@ -598,7 +598,7 @@ if __name__ == '__main__':
     parser.add_argument('--solver', type=str, default='adam', help='Optimizer')
     
     # Generative model arguments
-    parser.add_argument('--loss_weight', type=float, default=1.0, help='Reconstruction loss weight')
+    parser.add_argument('--loss_weight', type=float, default=1e3, help='Reconstruction loss weight')
     parser.add_argument('--sparsity_ratio', type=float, default=1.0, help='Sparsity ratio')
     parser.add_argument('--loss_type', type=str, default='KL', choices=['KL', 'CE'], help='Loss type')
     parser.add_argument('--temperature', type=float, default=3.0, help='Softmax temperature')

@@ -28,6 +28,7 @@ class FASTopicTrainer:
                               preprocess=preprocess,
                               num_top_words=num_top_words,
                               doc_embed_model=doc_embed_model,
+                              normalize_embeddings=True,  # Required for custom embedding models like gte-large-en-v1.5
                               DT_alpha=DT_alpha,
                               TW_alpha=TW_alpha,
                               theta_temp=theta_temp,

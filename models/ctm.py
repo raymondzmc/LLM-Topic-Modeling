@@ -283,7 +283,6 @@ class CTM(object):
             teacher_probs = teacher_probs.clamp_min(1e-9)
             student_probs = student_probs.clamp_min(1e-9)
             RL = torch.sum(teacher_probs * torch.log(teacher_probs / student_probs), dim=1)
-            RL = RL * (self.temperature ** 2)
         else:
             raise ValueError(f"Invalid loss type: {self.loss_type}")
 
