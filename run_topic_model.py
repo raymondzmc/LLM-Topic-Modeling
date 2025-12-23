@@ -13,12 +13,17 @@ from sentence_transformers import SentenceTransformer
 from data.loaders import load_training_data
 from data.dataset.octis_dataset import prepare_octis_dataset
 from data.dataset.ctm_dataset import get_ctm_dataset_from_processed_data
-from models.ctm import CTM as GenerativeTM
 from evaluation.metrics import compute_aggregate_results, evaluate_topic_model
 from utils.embeddings import get_openai_embedding
-
-
 from settings import settings
+
+# Model-specific imports
+from bertopic import BERTopic
+from gensim.downloader import load as gensim_load
+from models.octis import LDA, ProdLDA, CTM, ETM
+from models.fastopic import FASTopicTrainer
+from models.topmost.data import RawDataset
+from models.ctm import GenerativeTM
 
 
 LLM_MODELS = {'generative'}
@@ -72,12 +77,10 @@ def train_model(
         return model.get_info()
     
     elif model_name == 'lda':
-        from models.octis.LDA import LDA
         model = LDA(num_topics=args.num_topics, random_state=seed)
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
     elif model_name == 'prodlda':
-        from models.octis.ProdLDA import ProdLDA
         model = ProdLDA(
             num_topics=args.num_topics,
             batch_size=args.batch_size,
@@ -92,7 +95,6 @@ def train_model(
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
     elif model_name in ['zeroshot', 'combined']:
-        from models.octis.CTM import CTM
         model = CTM(
             num_topics=args.num_topics,
             num_layers=args.num_hidden_layers,
@@ -111,8 +113,6 @@ def train_model(
         return model.train_model(dataset=octis_dataset, top_words=args.top_words)
     
     elif model_name == 'etm':
-        from gensim.downloader import load as gensim_load
-        from models.octis.ETM import ETM
         word2vec_path = 'word2vec-google-news-300.kv'
         if not os.path.exists(word2vec_path):
             word2vec = gensim_load('word2vec-google-news-300')
@@ -133,8 +133,14 @@ def train_model(
         )
     
     elif model_name == 'bertopic':
-        from bertopic import BERTopic
         embedding_model = SentenceTransformer("Alibaba-NLP/gte-large-en-v1.5", trust_remote_code=True)
+        text_corpus = [' '.join(word_list) for word_list in bow_corpus]
+        embeddings = embedding_model.encode(
+            text_corpus,
+            batch_size=32,
+            show_progress_bar=True,
+            normalize_embeddings=True,
+        )
         model = BERTopic(
             language='english',
             top_n_words=args.top_words,
@@ -142,10 +148,8 @@ def train_model(
             calculate_probabilities=True,
             verbose=True,
             low_memory=False,
-            embedding_model=embedding_model,
         )
-        text_corpus = [' '.join(word_list) for word_list in bow_corpus]
-        output = model.fit_transform(text_corpus)
+        output = model.fit_transform(text_corpus, embeddings=embeddings)
         all_topics = model.get_topics()
         topics = [
             [word_prob[0] for word_prob in topic]
@@ -157,8 +161,6 @@ def train_model(
         }
     
     elif model_name == 'fastopic':
-        from models.fastopic import FASTopicTrainer
-        from topmost.data import RawDataset
         text_corpus = [' '.join(word_list) for word_list in bow_corpus]
         device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
         dataset = RawDataset(text_corpus, device=device)
@@ -585,7 +587,7 @@ if __name__ == '__main__':
     parser.add_argument('--model', type=str, default='generative',
                         choices=list(ALL_MODELS), help='Model to train')
     parser.add_argument('--num_topics', type=int, default=25, help='Number of topics')
-    parser.add_argument('--top_words', type=int, default=10, help='Top words per topic')
+    parser.add_argument('--top_words', type=int, default=15, help='Top words per topic')
     
     # Training arguments
     parser.add_argument('--num_seeds', type=int, default=5, help='Number of random seeds')

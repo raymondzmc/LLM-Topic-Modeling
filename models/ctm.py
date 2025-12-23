@@ -11,7 +11,7 @@ from models.octis.contextualized_topic_models.inference_network import Contextua
 from models.octis.early_stopping.pytorchtools import EarlyStopping
 
 
-class EncoderDecoderNetwork(torch.nn.Module):
+class Autoencoder(torch.nn.Module):
     def __init__(self, vocab_size, embedding_size, n_components=10, hidden_sizes=(100,100),
                  activation='softplus', dropout=0.2, learn_priors=True,
                  topic_prior_mean=0.0, topic_prior_variance=None, temperature=1.0):
@@ -28,7 +28,7 @@ class EncoderDecoderNetwork(torch.nn.Module):
             topic_prior_variance: double, variance parameter of the prior
             temperature: double, temperature parameter of the softmax
         """
-        super(EncoderDecoderNetwork, self).__init__()
+        super(Autoencoder, self).__init__()
         assert isinstance(vocab_size, int), "vocab_size must by type int."
         assert isinstance(embedding_size, int), "embedding_size must by type int."
         assert (isinstance(n_components, int) or isinstance(n_components, np.int64)) and n_components > 0, \
@@ -113,13 +113,7 @@ class EncoderDecoderNetwork(torch.nn.Module):
             return theta
 
 
-class CTM(object):
-    """Class to train the contextualized topic model.
-    
-    This model learns topic distributions by reconstructing LLM next-word logits
-    from document embeddings using a VAE architecture with KL divergence loss.
-    """
-
+class GenerativeTM(object):
     def __init__(
         self, vocab_size, embedding_size, num_topics=10, hidden_sizes=(100, 100),
         activation='softplus', dropout=0.2, learn_priors=True, batch_size=64,
@@ -215,7 +209,7 @@ class CTM(object):
         self.loss_type = loss_type
 
         # init encoder-decoder network
-        self.model = EncoderDecoderNetwork(
+        self.model = Autoencoder(
             vocab_size, embedding_size, num_topics, hidden_sizes, activation,
             dropout, self.learn_priors, self.topic_prior_mean,
             self.topic_prior_variance, self.temperature)

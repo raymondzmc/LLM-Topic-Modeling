@@ -165,7 +165,7 @@ class ETM(BaseETM):
                 len(self.vocab.keys()), self.device)
             sums = data_batch.sum(1).unsqueeze(1)
             if self.hyperparameters['bow_norm']:
-                normalized_data_batch = data_batch / sums
+                normalized_data_batch = data_batch / (sums + 1e-8)
             else:
                 normalized_data_batch = data_batch
             recon_loss, kld_theta = self.model(
@@ -227,7 +227,7 @@ class ETM(BaseETM):
                         ind, len(self.vocab.keys()), self.device)
                     sums = val_data_batch.sum(1).unsqueeze(1)
                     if self.hyperparameters['bow_norm']:
-                        val_normalized_data_batch = val_data_batch / sums
+                        val_normalized_data_batch = val_data_batch / (sums + 1e-8)
                     else:
                         val_normalized_data_batch = val_data_batch
 
@@ -296,7 +296,7 @@ class ETM(BaseETM):
                                         self.device)
             sums = data_batch.sum(1).unsqueeze(1)
             if self.hyperparameters['bow_norm']:
-                normalized_data_batch = data_batch / sums
+                normalized_data_batch = data_batch / (sums + 1e-8)
             else:
                 normalized_data_batch = data_batch
             theta, _ = self.model.get_theta(normalized_data_batch)

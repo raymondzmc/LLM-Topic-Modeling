@@ -1,6 +1,6 @@
 from models.topmost.utils.logger import Logger
 from models.topmost.preprocess import Preprocess
-from models.fastopic import FASTopic
+from models.fastopic.FASTopic import FASTopic
 
 logger = Logger("WARNING")
 
