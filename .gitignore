@@ -17,6 +17,9 @@ build/
 # Data directories (large files, downloaded from HF)
 data/processed_data/
 data/.cache/
+data/wikipedia/wikipedia_bd/
+data/wikipedia/wikipedia_bd.histogram
+data/wikipedia/Wikipedia_bd.zip
 
 # Model files
 *.pt
