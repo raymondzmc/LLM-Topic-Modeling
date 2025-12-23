@@ -1,3 +1,9 @@
+import os
+import re
+import subprocess
+import tempfile
+import warnings
+
 from evaluation.abc import AbstractMetric
 from data.dataset import OCTISDataset
 from gensim.corpora.dictionary import Dictionary
@@ -68,6 +74,133 @@ class Coherence(AbstractMetric):
                 processes=self.processes,
                 topn=self.topk)
             return npmi.get_coherence()
+
+
+class PalmettoCoherence(AbstractMetric):
+    """
+    Compute topic coherence using the Palmetto JAR with Wikipedia as reference corpus.
+    
+    Requires:
+    - Java installed and available in PATH
+    - Palmetto JAR file (palmetto-0.1.0-jar-with-dependencies.jar)
+    - Wikipedia Lucene index (wikipedia_bd directory)
+    """
+    
+    def __init__(
+        self,
+        palmetto_jar: str = "data/wikipedia/palmetto-0.1.0-jar-with-dependencies.jar",
+        wikipedia_index: str = "data/wikipedia/wikipedia_bd",
+        measure: str = "C_V",
+        topk: int = 10,
+    ):
+        """
+        Initialize Palmetto coherence metric.
+        
+        Parameters
+        ----------
+        palmetto_jar : str
+            Path to the Palmetto JAR file.
+        wikipedia_index : str
+            Path to the Wikipedia Lucene index directory.
+        measure : str
+            Coherence measure to use. Options: C_V, C_NPMI, C_P, C_A, C_UCI, C_CP.
+        topk : int
+            Number of top words per topic to use for coherence computation.
+        """
+        super().__init__()
+        self.palmetto_jar = palmetto_jar
+        self.wikipedia_index = wikipedia_index
+        self.measure = measure
+        self.topk = topk
+        
+        # Validate paths exist
+        if not os.path.exists(self.palmetto_jar):
+            raise FileNotFoundError(f"Palmetto JAR not found: {self.palmetto_jar}")
+        if not os.path.exists(self.wikipedia_index):
+            raise FileNotFoundError(f"Wikipedia index not found: {self.wikipedia_index}")
+    
+    def info(self):
+        return {
+            "citation": "Röder, M., Both, A., & Hinneburg, A. (2015). Exploring the space of topic coherence measures.",
+            "name": f"Palmetto Coherence ({self.measure})"
+        }
+    
+    def score(self, model_output) -> float:
+        """
+        Compute coherence score using Palmetto.
+        
+        Parameters
+        ----------
+        model_output : dict
+            Dictionary containing 'topics' key with list of topic word lists.
+        
+        Returns
+        -------
+        float
+            Mean coherence score across all topics.
+        """
+        topics = model_output["topics"]
+        if topics is None:
+            return -1.0
+        
+        if self.topk > len(topics[0]):
+            raise ValueError(f"Words in topics ({len(topics[0])}) are less than topk ({self.topk})")
+        
+        # Create temporary file with topics (one topic per line, space-separated words)
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+            for topic in topics:
+                # Take only top-k words
+                top_words = topic[:self.topk]
+                f.write(' '.join(top_words) + '\n')
+            topics_file = f.name
+        
+        try:
+            # Run Palmetto JAR
+            cmd = [
+                'java', '-jar', self.palmetto_jar,
+                self.wikipedia_index,
+                self.measure,
+                topics_file
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=600,  # 10 minute timeout
+            )
+            
+            if result.returncode != 0:
+                warnings.warn(f"Palmetto failed with return code {result.returncode}: {result.stderr}")
+                return -1.0
+            
+            # Parse output - format: "    0\t0.65341\t[word, word, ...]"
+            scores = []
+            for line in result.stdout.strip().split('\n'):
+                match = re.match(r'^\s*\d+\t([-\d.]+)\t', line)
+                if match:
+                    score = float(match.group(1))
+                    scores.append(score)
+            
+            if len(scores) == 0:
+                warnings.warn(f"No scores parsed from Palmetto output: {result.stdout}")
+                return -1.0
+            
+            return float(np.mean(scores))
+            
+        except subprocess.TimeoutExpired:
+            warnings.warn("Palmetto computation timed out after 10 minutes")
+            return -1.0
+        except FileNotFoundError:
+            warnings.warn("Java not found. Please install Java to use Palmetto coherence.")
+            return -1.0
+        except Exception as e:
+            warnings.warn(f"Palmetto error: {e}")
+            return -1.0
+        finally:
+            # Clean up temp file
+            if os.path.exists(topics_file):
+                os.unlink(topics_file)
 
 
 class WECoherencePairwise(AbstractMetric):

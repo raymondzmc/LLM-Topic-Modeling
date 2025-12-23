@@ -9,7 +9,7 @@ from settings import settings
 from llm import jinja_template_manager
 from evaluation.abc import AbstractMetric
 from evaluation.diversity_metrics import TopicDiversity, InvertedRBO
-from evaluation.coherence_metrics import Coherence
+from evaluation.coherence_metrics import Coherence, PalmettoCoherence
 from gensim.downloader import load as gensim_load
 from gensim.models import KeyedVectors
 from sklearn.metrics.pairwise import pairwise_distances
@@ -243,6 +243,24 @@ def evaluate_topic_model(model_output, top_words=10, test_corpus=None, embedding
         cv_score = cv.score(model_output)
         print("CV:", cv_score)
         evaluation_results['cv'] = float(cv_score)
+
+    # Wikipedia-based C_V using Palmetto
+    palmetto_jar = "data/wikipedia/palmetto-0.1.0-jar-with-dependencies.jar"
+    wikipedia_index = "data/wikipedia/wikipedia_bd"
+    if os.path.exists(palmetto_jar) and os.path.exists(wikipedia_index):
+        try:
+            palmetto_cv = PalmettoCoherence(
+                palmetto_jar=palmetto_jar,
+                wikipedia_index=wikipedia_index,
+                measure="C_V",
+                topk=top_words,
+            )
+            cv_wiki_score = palmetto_cv.score(model_output)
+            if cv_wiki_score != -1.0:
+                print("CV (Wikipedia):", cv_wiki_score)
+                evaluation_results['cv_wiki'] = float(cv_wiki_score)
+        except Exception as e:
+            print(f"Palmetto coherence skipped: {e}")
 
     # if embeddings is not None:
     #     openai_we = PairwiseEmbeddings(embeddings, topk=top_words)

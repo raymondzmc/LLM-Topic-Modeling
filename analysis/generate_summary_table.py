@@ -2,6 +2,7 @@
 
 Fetches completed runs from wandb projects (one per dataset), filters by method,
 and generates a summary table averaging metrics across K=25,50,75,100.
+Includes statistical significance testing to highlight the best methods.
 """
 
 import sys
@@ -12,12 +13,17 @@ from typing import Optional
 import wandb
 from collections import defaultdict
 import numpy as np
+from scipy import stats
 from settings import settings
+
+# Statistical significance threshold
+SIGNIFICANCE_LEVEL = 0.05
 
 
 # Configuration
 DATASETS = ["20_newsgroups", "tweet_topic", "stackoverflow"]
 K_VALUES = [25, 50, 75, 100]
+REQUIRED_NUM_SEEDS = 5  # Only include runs with exactly this many seeds
 
 # Baseline methods (config.model value)
 BASELINE_METHODS = ["lda", "prodlda", "zeroshot", "combined", "etm", "bertopic", "fastopic"]
@@ -113,7 +119,25 @@ def extract_metrics_from_run(run) -> dict:
     return metrics
 
 
-def aggregate_metrics(runs_data: list[dict]) -> dict:
+def extract_seed_metrics_from_run(run, num_seeds: int = REQUIRED_NUM_SEEDS) -> dict:
+    """Extract individual seed metrics from a run's summary.
+    
+    Returns:
+        Dict: {metric_name: [seed_0_value, seed_1_value, ...]}
+    """
+    seed_metrics = {m: [] for m in METRICS}
+    
+    for seed in range(num_seeds):
+        for metric in METRICS:
+            key = f"seed_{seed}/{metric}"
+            value = run.summary.get(key)
+            if value is not None:
+                seed_metrics[metric].append(value)
+    
+    return seed_metrics
+
+
+def aggregate_metrics(runs_data: list) -> dict:
     """Aggregate metrics across multiple runs by averaging.
     
     Args:
@@ -135,6 +159,101 @@ def aggregate_metrics(runs_data: list[dict]) -> dict:
     return aggregated
 
 
+def aggregate_seed_metrics(all_seed_metrics: list) -> dict:
+    """Aggregate seed-level metrics across multiple runs.
+    
+    Args:
+        all_seed_metrics: List of dicts, each containing {metric: [seed_values]}
+        
+    Returns:
+        Dict: {metric: flat_list_of_all_values}
+    """
+    aggregated = {m: [] for m in METRICS}
+    for seed_metrics in all_seed_metrics:
+        for metric in METRICS:
+            aggregated[metric].extend(seed_metrics.get(metric, []))
+    return aggregated
+
+
+def perform_significance_tests(raw_data: dict, method_keys: list, dataset: str, metric: str) -> dict:
+    """Perform pairwise t-tests to find the best method and methods not significantly different.
+    
+    Args:
+        raw_data: {method_key: {dataset: {metric: [values]}}}
+        method_keys: List of method keys to compare
+        dataset: Dataset name
+        metric: Metric name
+        
+    Returns:
+        Dict: {method_key: 'best' | 'not_sig_diff' | 'worse' | None}
+    """
+    # Collect values for each method
+    method_values = {}
+    for method_key in method_keys:
+        values = raw_data.get(method_key, {}).get(dataset, {}).get(metric, [])
+        if values:
+            method_values[method_key] = np.array(values)
+    
+    if not method_values:
+        return {m: None for m in method_keys}
+    
+    # Find the method with the highest mean
+    means = {m: np.mean(v) for m, v in method_values.items()}
+    best_method = max(means, key=means.get)
+    best_values = method_values[best_method]
+    
+    results = {}
+    for method_key in method_keys:
+        if method_key not in method_values:
+            results[method_key] = None
+            continue
+        
+        if method_key == best_method:
+            results[method_key] = 'best'
+        else:
+            # Perform two-sample t-test (independent samples)
+            other_values = method_values[method_key]
+            try:
+                # Use Welch's t-test (unequal variances)
+                _, p_value = stats.ttest_ind(best_values, other_values, equal_var=False)
+                if p_value >= SIGNIFICANCE_LEVEL:
+                    # Not significantly different from the best
+                    results[method_key] = 'not_sig_diff'
+                else:
+                    results[method_key] = 'worse'
+            except Exception:
+                results[method_key] = 'worse'
+    
+    return results
+
+
+def format_value_with_significance(value, sig_status, decimals=3):
+    """Format a metric value with significance markers.
+    
+    Args:
+        value: The metric value
+        sig_status: 'best', 'not_sig_diff', 'worse', or None
+        decimals: Number of decimal places
+        
+    Returns:
+        Formatted string with markers:
+        - **value** for best
+        - *value* for not significantly different from best
+        - value for worse
+    """
+    if value is None:
+        return "-"
+    
+    formatted = f"{value:.{decimals}f}"
+    
+    if sig_status == 'best':
+        return f"**{formatted}**"
+    elif sig_status == 'not_sig_diff':
+        return f"*{formatted}*"
+    else:
+        return formatted
+
+
 def format_value(value, decimals=3):
     """Format a metric value for display."""
     if value is None:
@@ -142,15 +261,33 @@ def format_value(value, decimals=3):
     return f"{value:.{decimals}f}"
 
 
-def print_summary_table(summary: dict):
-    """Print the summary table in a readable format."""
+def print_summary_table(summary: dict, raw_data: dict = None):
+    """Print the summary table in a readable format with significance markers.
+    
+    Args:
+        summary: {method_key: {dataset: {metric: avg_value}}}
+        raw_data: {method_key: {dataset: {metric: [all_values]}}} for significance testing
+    """
     # Header
     metric_labels = ["CV", "LLM", "I-RBO", "Purity"]
     
-    # Column widths
+    # Column widths (increased for significance markers)
     method_width = 25
-    metric_width = 7
+    metric_width = 9
     dataset_width = metric_width * len(metric_labels) + len(metric_labels) - 1
+    
+    # Order of methods in the table
+    method_order = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
+    
+    # Compute significance for each metric and dataset
+    significance = {}
+    if raw_data is not None:
+        for dataset in DATASETS:
+            significance[dataset] = {}
+            for metric in METRICS:
+                significance[dataset][metric] = perform_significance_tests(
+                    raw_data, method_order, dataset, metric
+                )
     
     # Print header row 1 (dataset names)
     header1 = f"{'Method':<{method_width}}"
@@ -167,9 +304,6 @@ def print_summary_table(summary: dict):
     print(header2)
     print("=" * len(header1))
     
-    # Order of methods in the table
-    method_order = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
-    
     # Print rows
     for method_key in method_order:
         display_name = METHOD_DISPLAY_NAMES.get(method_key, method_key)
@@ -180,13 +314,17 @@ def print_summary_table(summary: dict):
             values = []
             for metric in METRICS:
                 val = metrics_data.get(metric)
-                values.append(format_value(val))
+                sig_status = None
+                if raw_data is not None:
+                    sig_status = significance.get(dataset, {}).get(metric, {}).get(method_key)
+                values.append(format_value_with_significance(val, sig_status))
             metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
             row += f" | {metrics_str}"
         
         print(row)
     
     print("=" * len(header1))
+    print("Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
 
 
 def get_ablation_key_from_run(run) -> Optional[str]:
@@ -224,16 +362,19 @@ def get_ablation_key_from_run(run) -> Optional[str]:
         return "original"
 
 
-def build_ablation_table(all_runs: dict) -> dict:
+def build_ablation_table(all_runs: dict):
     """Build the ablation summary table from wandb runs.
     
     Args:
         all_runs: Dict mapping dataset name to list of runs (pre-fetched)
     
     Returns:
-        Dict: {ablation_type: {dataset: {metric: value}}}
+        Tuple:
+            - summary: {ablation_type: {dataset: {metric: avg_value}}}
+            - raw_data: {ablation_type: {dataset: {metric: [all_values]}}}
     """
     results = defaultdict(lambda: defaultdict(list))
+    raw_seed_data = defaultdict(lambda: defaultdict(list))
     
     for dataset in DATASETS:
         runs = all_runs.get(dataset, [])
@@ -249,36 +390,67 @@ def build_ablation_table(all_runs: dict) -> dict:
             if num_topics not in K_VALUES:
                 continue
             
-            # Extract metrics
+            # Check if run has the required number of seeds
+            num_seeds = run.config.get("num_seeds", 0)
+            if num_seeds != REQUIRED_NUM_SEEDS:
+                continue
+            
+            # Extract average metrics
             metrics = extract_metrics_from_run(run)
             if metrics:
                 results[ablation_key][dataset].append(metrics)
+            
+            # Extract seed-level metrics for statistical testing
+            seed_metrics = extract_seed_metrics_from_run(run)
+            if any(seed_metrics[m] for m in METRICS):
+                raw_seed_data[ablation_key][dataset].append(seed_metrics)
     
     # Aggregate results
     summary = {}
+    raw_data = {}
     for ablation_key in ABLATION_TYPES:
         summary[ablation_key] = {}
+        raw_data[ablation_key] = {}
         for dataset in DATASETS:
             runs_data = results[ablation_key][dataset]
             summary[ablation_key][dataset] = aggregate_metrics(runs_data)
+            
+            # Aggregate seed-level data
+            seed_data_list = raw_seed_data[ablation_key][dataset]
+            raw_data[ablation_key][dataset] = aggregate_seed_metrics(seed_data_list)
             
             # Print debug info
             n_runs = len(runs_data)
             if n_runs > 0:
                 print(f"  {ablation_key} on {dataset}: {n_runs} runs")
     
-    return summary
+    return summary, raw_data
 
 
-def print_ablation_table(summary: dict):
-    """Print the ablation summary table in a readable format."""
+def print_ablation_table(summary: dict, raw_data: dict = None):
+    """Print the ablation summary table in a readable format with significance markers.
+    
+    Args:
+        summary: {ablation_type: {dataset: {metric: avg_value}}}
+        raw_data: {ablation_type: {dataset: {metric: [all_values]}}} for significance testing
+    """
     # Header
     metric_labels = ["CV", "LLM", "I-RBO", "Purity"]
     
-    # Column widths
+    # Column widths (increased for significance markers)
     method_width = 25
-    metric_width = 7
+    metric_width = 9
     dataset_width = metric_width * len(metric_labels) + len(metric_labels) - 1
+    
+    # Compute significance for each metric and dataset
+    significance = {}
+    if raw_data is not None:
+        for dataset in DATASETS:
+            significance[dataset] = {}
+            for metric in METRICS:
+                significance[dataset][metric] = perform_significance_tests(
+                    raw_data, ABLATION_TYPES, dataset, metric
+                )
     
     # Print header row 1 (dataset names)
     header1 = f"{'Ablation':<{method_width}}"
@@ -307,25 +479,32 @@ def print_ablation_table(summary: dict):
             values = []
             for metric in METRICS:
                 val = metrics_data.get(metric)
-                values.append(format_value(val))
+                sig_status = None
+                if raw_data is not None:
+                    sig_status = significance.get(dataset, {}).get(metric, {}).get(ablation_key)
+                values.append(format_value_with_significance(val, sig_status))
             metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
             row += f" | {metrics_str}"
         
         print(row)
     
     print("=" * len(header1))
+    print("Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
 
 
-def build_summary_table_from_runs(all_runs: dict) -> dict:
+def build_summary_table_from_runs(all_runs: dict):
     """Build the complete summary table from pre-fetched wandb runs.
     
     Args:
         all_runs: Dict mapping dataset name to list of runs
     
     Returns:
-        Dict: {method_key: {dataset: {metric: value}}}
+        Tuple:
+            - summary: {method_key: {dataset: {metric: avg_value}}}
+            - raw_data: {method_key: {dataset: {metric: [all_values]}}}
     """
     results = defaultdict(lambda: defaultdict(list))
+    raw_seed_data = defaultdict(lambda: defaultdict(list))
     all_method_keys = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
     
     for dataset in DATASETS:
@@ -342,25 +521,41 @@ def build_summary_table_from_runs(all_runs: dict) -> dict:
             if num_topics not in K_VALUES:
                 continue
             
-            # Extract metrics
+            # Check if run has the required number of seeds
+            num_seeds = run.config.get("num_seeds", 0)
+            if num_seeds != REQUIRED_NUM_SEEDS:
+                continue
+            
+            # Extract average metrics
             metrics = extract_metrics_from_run(run)
             if metrics:
                 results[method_key][dataset].append(metrics)
+            
+            # Extract seed-level metrics for statistical testing
+            seed_metrics = extract_seed_metrics_from_run(run)
+            if any(seed_metrics[m] for m in METRICS):
+                raw_seed_data[method_key][dataset].append(seed_metrics)
     
     # Aggregate results
     summary = {}
+    raw_data = {}
     for method_key in all_method_keys:
         summary[method_key] = {}
+        raw_data[method_key] = {}
         for dataset in DATASETS:
             runs_data = results[method_key][dataset]
             summary[method_key][dataset] = aggregate_metrics(runs_data)
+            
+            # Aggregate seed-level data
+            seed_data_list = raw_seed_data[method_key][dataset]
+            raw_data[method_key][dataset] = aggregate_seed_metrics(seed_data_list)
             
             # Print debug info
             n_runs = len(runs_data)
             if n_runs > 0:
                 print(f"  {method_key} on {dataset}: {n_runs} runs")
     
-    return summary
+    return summary, raw_data
 
 
 def main():
@@ -370,7 +565,9 @@ def main():
     print(f"Entity: {settings.wandb_entity}")
     print(f"Datasets: {DATASETS}")
     print(f"K values: {K_VALUES}")
+    print(f"Required seeds: {REQUIRED_NUM_SEEDS}")
     print(f"Metrics: {METRICS}")
+    print(f"Significance level: {SIGNIFICANCE_LEVEL}")
     print("=" * 60 + "\n")
     
     # Fetch all runs once
@@ -380,13 +577,13 @@ def main():
     
     # Build and print main summary table
     print("\n--- Main Methods Summary ---")
-    summary = build_summary_table_from_runs(all_runs)
-    print_summary_table(summary)
+    summary, raw_data = build_summary_table_from_runs(all_runs)
+    print_summary_table(summary, raw_data)
     
     # Build and print ablation table
     print("\n--- Ablation Experiments Summary ---")
-    ablation_summary = build_ablation_table(all_runs)
-    print_ablation_table(ablation_summary)
+    ablation_summary, ablation_raw_data = build_ablation_table(all_runs)
+    print_ablation_table(ablation_summary, ablation_raw_data)
 
 
 if __name__ == "__main__":
