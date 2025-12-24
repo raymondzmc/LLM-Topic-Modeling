@@ -278,19 +278,25 @@ def benchmark_sentence_transformer(
     
     # Get tokenizer for sequence length estimation
     tokenizer = model.tokenizer
+    max_seq_length = model.max_seq_length
+    print(f"Model max sequence length: {max_seq_length}")
     
-    # Estimate average sequence length by sampling
+    # Estimate average sequence length by sampling (compute actual lengths, not padded)
     sample_size = min(100, len(documents))
     sample_docs = documents[:sample_size]
     sample_encodings = tokenizer(
         sample_docs,
-        padding=True,
+        padding=False,  # Don't pad to get actual lengths
         truncation=True,
-        max_length=model.max_seq_length,
-        return_tensors="pt"
+        max_length=max_seq_length,
+        return_tensors=None  # Return list of lists
     )
-    avg_seq_length = sample_encodings['input_ids'].shape[1]
-    print(f"Average sequence length (sampled): {avg_seq_length}")
+    # Compute actual average sequence length per document
+    seq_lengths = [len(ids) for ids in sample_encodings['input_ids']]
+    avg_seq_length = np.mean(seq_lengths)
+    min_seq_length = min(seq_lengths)
+    max_seq_length_actual = max(seq_lengths)
+    print(f"Sequence lengths - Avg: {avg_seq_length:.1f}, Min: {min_seq_length}, Max: {max_seq_length_actual} (sampled from {sample_size} docs)")
     
     # Warmup
     print("Warming up...")
@@ -302,6 +308,20 @@ def benchmark_sentence_transformer(
     
     # Benchmark
     print("Running benchmark...")
+    
+    # Compute actual total tokens for more accurate FLOPs calculation
+    # (do this before timing to not include tokenization in timing)
+    all_encodings = tokenizer(
+        documents,
+        padding=False,
+        truncation=True,
+        max_length=model.max_seq_length,
+        return_tensors=None
+    )
+    total_tokens = sum(len(ids) for ids in all_encodings['input_ids'])
+    actual_avg_seq_length = total_tokens / len(documents)
+    print(f"Actual average sequence length (all docs): {actual_avg_seq_length:.1f}")
+    
     start_time = time.time()
     _ = model.encode(documents, batch_size=batch_size, show_progress_bar=True)
     
@@ -314,7 +334,8 @@ def benchmark_sentence_transformer(
     if torch.cuda.is_available():
         gpu_memory = torch.cuda.max_memory_allocated() / 1024**2
     
-    # Compute FLOPs
+    # Compute FLOPs using actual average sequence length
+    avg_seq_length = actual_avg_seq_length  # Use actual, not sampled
     flops_per_doc = estimate_transformer_flops(num_params, avg_seq_length, is_encoder=True)
     total_flops = flops_per_doc * len(documents)
     tflops_per_second = (total_flops / total_time) / 1e12  # Convert to TFLOPs/s

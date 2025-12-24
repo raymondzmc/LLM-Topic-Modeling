@@ -20,6 +20,7 @@ from settings import settings
 # Model-specific imports
 from bertopic import BERTopic
 from gensim.downloader import load as gensim_load
+from sklearn.feature_extraction.text import CountVectorizer
 from models.octis import LDA, ProdLDA, CTM, ETM
 from models.fastopic import FASTopicTrainer
 from models.topmost.ECRTM import ECRTMTrainer
@@ -142,7 +143,13 @@ def train_model(
             show_progress_bar=True,
             normalize_embeddings=True,
         )
+        
+        # Constrain BERTopic to use the preprocessed vocabulary for fair comparison
+        # This ensures topics are distributions over the same vocab as ProdLDA/ETM/ZeroshotTM
+        vectorizer = CountVectorizer(vocabulary={w: i for i, w in enumerate(vocab)})
+        
         model = BERTopic(
+            vectorizer_model=vectorizer,
             language='english',
             top_n_words=args.top_words,
             nr_topics=args.num_topics + 1,
@@ -153,7 +160,8 @@ def train_model(
         output = model.fit_transform(text_corpus, embeddings=embeddings)
         all_topics = model.get_topics()
         topics = [
-            [word_prob[0] for word_prob in topic]
+            # Filter out empty strings that BERTopic adds when topic has fewer words than top_n_words
+            [word_prob[0] for word_prob in topic if word_prob[0].strip()]
             for topic_id, topic in all_topics.items() if topic_id != -1
         ]
         return {

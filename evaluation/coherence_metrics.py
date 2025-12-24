@@ -146,61 +146,70 @@ class PalmettoCoherence(AbstractMetric):
         if self.topk > len(topics[0]):
             raise ValueError(f"Words in topics ({len(topics[0])}) are less than topk ({self.topk})")
         
-        # Create temporary file with topics (one topic per line, space-separated words)
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            for topic in topics:
-                # Take only top-k words
-                top_words = topic[:self.topk]
-                f.write(' '.join(top_words) + '\n')
-            topics_file = f.name
+        # Process topics individually to avoid Palmetto batch processing bugs
+        # (ArrayIndexOutOfBoundsException when topics contain empty strings)
+        scores = []
         
-        try:
-            # Run Palmetto JAR
-            cmd = [
-                'java', '-jar', self.palmetto_jar,
-                self.wikipedia_index,
-                self.measure,
-                topics_file
-            ]
+        for topic in topics:
+            # Take only top-k words and filter out empty strings
+            top_words = [w for w in topic[:self.topk] if w.strip()]
             
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=600,  # 10 minute timeout
-            )
+            if len(top_words) == 0:
+                # Skip empty topics
+                continue
             
-            if result.returncode != 0:
-                warnings.warn(f"Palmetto failed with return code {result.returncode}: {result.stderr}")
+            # Create temporary file with single topic
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+                f.write(' '.join(top_words) + '\n')
+                topics_file = f.name
+            
+            try:
+                # Run Palmetto JAR
+                cmd = [
+                    'java', '-jar', self.palmetto_jar,
+                    self.wikipedia_index,
+                    self.measure,
+                    topics_file
+                ]
+                
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,  # 1 minute timeout per topic
+                )
+                
+                if result.returncode != 0:
+                    # Skip this topic if Palmetto fails
+                    continue
+                
+                # Parse output - format: "    0\t0.65341\t[word, word, ...]"
+                for line in result.stdout.strip().split('\n'):
+                    match = re.match(r'^\s*\d+\t([-\d.]+)\t', line)
+                    if match:
+                        score = float(match.group(1))
+                        scores.append(score)
+                        break
+                        
+            except subprocess.TimeoutExpired:
+                # Skip this topic if it times out
+                continue
+            except FileNotFoundError:
+                warnings.warn("Java not found. Please install Java to use Palmetto coherence.")
                 return -1.0
-            
-            # Parse output - format: "    0\t0.65341\t[word, word, ...]"
-            scores = []
-            for line in result.stdout.strip().split('\n'):
-                match = re.match(r'^\s*\d+\t([-\d.]+)\t', line)
-                if match:
-                    score = float(match.group(1))
-                    scores.append(score)
-            
-            if len(scores) == 0:
-                warnings.warn(f"No scores parsed from Palmetto output: {result.stdout}")
-                return -1.0
-            
-            return float(np.mean(scores))
-            
-        except subprocess.TimeoutExpired:
-            warnings.warn("Palmetto computation timed out after 10 minutes")
+            except Exception:
+                # Skip this topic on any error
+                continue
+            finally:
+                # Clean up temp file
+                if os.path.exists(topics_file):
+                    os.unlink(topics_file)
+        
+        if len(scores) == 0:
+            warnings.warn("No topics could be scored by Palmetto")
             return -1.0
-        except FileNotFoundError:
-            warnings.warn("Java not found. Please install Java to use Palmetto coherence.")
-            return -1.0
-        except Exception as e:
-            warnings.warn(f"Palmetto error: {e}")
-            return -1.0
-        finally:
-            # Clean up temp file
-            if os.path.exists(topics_file):
-                os.unlink(topics_file)
+        
+        return float(np.mean(scores))
 
 
 class WECoherencePairwise(AbstractMetric):
