@@ -26,7 +26,7 @@ K_VALUES = [25, 50, 75, 100]
 REQUIRED_NUM_SEEDS = 5  # Only include runs with exactly this many seeds
 
 # Baseline methods (config.model value)
-BASELINE_METHODS = ["lda", "prodlda", "zeroshot", "combined", "etm", "bertopic", "fastopic"]
+BASELINE_METHODS = ["lda", "prodlda", "zeroshot", "combined", "etm", "bertopic", "ecrtm", "fastopic"]
 
 # Generative LLM variants (extracted from run name: generative_{LLM_MODEL}_K{num})
 GENERATIVE_LLM_MODELS = [
@@ -36,7 +36,7 @@ GENERATIVE_LLM_MODELS = [
 ]
 
 # Metrics to extract (logged under avg/ prefix)
-METRICS = ["cv", "llm_rating", "inverted_rbo", "purity"]
+METRICS = ["cv_wiki", "llm_rating", "inverted_rbo", "purity"]
 METRIC_KEYS = [f"avg/{m}" for m in METRICS]
 
 # Display names for methods
@@ -47,6 +47,7 @@ METHOD_DISPLAY_NAMES = {
     "combined": "CombinedTM",
     "etm": "ETM",
     "bertopic": "BERTopic",
+    "ecrtm": "ECRTM",
     "fastopic": "FASTopic",
     "generative_ERNIE-4.5-0.3B-PT": "Generative (ERNIE)",
     "generative_Llama-3.1-8B-Instruct": "Generative (Llama-8B)",

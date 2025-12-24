@@ -2,8 +2,8 @@
 # Run LDA baseline
 
 datasets=(
-    # "raymondzmc/20_newsgroups_Llama-3.1-8B-Instruct_vocab_2000_last"
-    # "raymondzmc/tweet_topic_Llama-3.1-8B-Instruct_vocab_2000_last"
+    "raymondzmc/20_newsgroups_Llama-3.1-8B-Instruct_vocab_2000_last"
+    "raymondzmc/tweet_topic_Llama-3.1-8B-Instruct_vocab_2000_last"
     "raymondzmc/stackoverflow_Llama-3.1-8B-Instruct_vocab_2000_last"
 )
 
