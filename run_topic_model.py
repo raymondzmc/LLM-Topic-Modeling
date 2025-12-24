@@ -22,12 +22,13 @@ from bertopic import BERTopic
 from gensim.downloader import load as gensim_load
 from models.octis import LDA, ProdLDA, CTM, ETM
 from models.fastopic import FASTopicTrainer
+from models.topmost.ECRTM import ECRTMTrainer
 from models.topmost.data import RawDataset
 from models.ctm import GenerativeTM
 
 
 LLM_MODELS = {'generative'}
-BASELINE_MODELS = {'lda', 'prodlda', 'zeroshot', 'combined', 'etm', 'bertopic', 'fastopic'}
+BASELINE_MODELS = {'lda', 'prodlda', 'zeroshot', 'combined', 'etm', 'bertopic', 'fastopic', 'ecrtm'}
 ALL_MODELS = LLM_MODELS | BASELINE_MODELS
 
 
@@ -181,6 +182,50 @@ def train_model(
         return {
             'topics': [topic_string.split(' ') for topic_string in top_words],
             'topic-document-matrix': doc_topic_dist.transpose(),
+        }
+    
+    elif model_name == 'ecrtm':
+        # Convert bow_corpus to BoW matrix using CountVectorizer
+        from sklearn.feature_extraction.text import CountVectorizer
+        import scipy.sparse
+        
+        text_corpus = [' '.join(word_list) for word_list in bow_corpus]
+        vocab2id = {word: idx for idx, word in enumerate(vocab)}
+        
+        vectorizer = CountVectorizer(vocabulary=vocab2id, token_pattern=r'(?u)\b\w+\b')
+        bow_matrix = vectorizer.fit_transform(text_corpus).toarray().astype('float32')
+        
+        # Load or compute GloVe word embeddings
+        glove_path = os.path.join(local_data_path, 'glove_word_embeddings.npz')
+        if os.path.exists(glove_path):
+            print(f"Loading cached GloVe embeddings from {glove_path}")
+            pretrained_WE = scipy.sparse.load_npz(glove_path).toarray().astype('float32')
+        else:
+            print(f"Computing GloVe embeddings for vocabulary...")
+            from models.topmost.ECRTM.preprocess import get_word_embeddings
+            pretrained_WE_sparse = get_word_embeddings(vocab, embedding_model='glove-wiki-gigaword-200')
+            scipy.sparse.save_npz(glove_path, pretrained_WE_sparse)
+            pretrained_WE = pretrained_WE_sparse.toarray().astype('float32')
+            print(f"Cached GloVe embeddings to {glove_path}")
+        
+        # Initialize and train ECRTM
+        trainer = ECRTMTrainer(
+            vocab_size=len(vocab),
+            num_topics=args.num_topics,
+            vocab=vocab,
+            pretrained_WE=pretrained_WE,
+        )
+        
+        beta = trainer.train(bow_matrix, verbose=True)
+        topics = trainer.get_topics(beta, top_words=args.top_words)
+        theta = trainer.get_theta(bow_matrix)
+        
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        
+        return {
+            'topics': topics,
+            'topic-document-matrix': theta.T,
         }
     
     else:

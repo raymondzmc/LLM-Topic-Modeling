@@ -1,3 +1,3 @@
-from models.topmost.ECRTM.ECRTM import ECRTM
+from models.topmost.ECRTM.ECRTM_Trainer import ECRTMTrainer
 
-__all__ = ['ECRTM']
+__all__ = ['ECRTMTrainer']
