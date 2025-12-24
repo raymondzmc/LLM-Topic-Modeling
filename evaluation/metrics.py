@@ -245,9 +245,14 @@ def evaluate_topic_model(model_output, top_words=10, test_corpus=None, embedding
         evaluation_results['cv'] = float(cv_score)
 
     # Wikipedia-based C_V using Palmetto
-    palmetto_jar = "data/wikipedia/palmetto-0.1.0-jar-with-dependencies.jar"
-    wikipedia_index = "data/wikipedia/wikipedia_bd"
-    if os.path.exists(palmetto_jar) and os.path.exists(wikipedia_index):
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    palmetto_jar = os.path.join(project_root, "data/wikipedia/palmetto-0.1.0-jar-with-dependencies.jar")
+    wikipedia_index = os.path.join(project_root, "data/wikipedia/wikipedia_bd")
+    
+    jar_exists = os.path.exists(palmetto_jar)
+    index_exists = os.path.exists(wikipedia_index)
+    
+    if jar_exists and index_exists:
         try:
             palmetto_cv = PalmettoCoherence(
                 palmetto_jar=palmetto_jar,
@@ -259,19 +264,17 @@ def evaluate_topic_model(model_output, top_words=10, test_corpus=None, embedding
             if cv_wiki_score != -1.0:
                 print("CV (Wikipedia):", cv_wiki_score)
                 evaluation_results['cv_wiki'] = float(cv_wiki_score)
+            else:
+                print("CV (Wikipedia): skipped (Palmetto returned -1.0)")
         except Exception as e:
             print(f"Palmetto coherence skipped: {e}")
-
-    # if embeddings is not None:
-    #     openai_we = PairwiseEmbeddings(embeddings, topk=top_words)
-    #     openai_we_score = openai_we.score(model_output)
-    #     print("(OpenAI) Word Embeddings:", openai_we_score)
-    #     evaluation_results['openai_word_embeddings'] = float(openai_we_score)
-
-    # word2vec_we = Word2VecEmbeddingCoherence(top_k=top_words)
-    # word2vec_we_score = word2vec_we.score(model_output)
-    # print("(Word2Vec) Word Embeddings:", word2vec_we_score)
-    # evaluation_results['word2vec_word_embeddings'] = float(word2vec_we_score)
+    else:
+        missing = []
+        if not jar_exists:
+            missing.append(f"JAR not found: {palmetto_jar}")
+        if not index_exists:
+            missing.append(f"Index not found: {wikipedia_index}")
+        print(f"CV (Wikipedia): skipped ({'; '.join(missing)})")
 
     llm_ratings = compute_llm_rating(model_output['topics'])
     llm_average_rating = float(np.mean(llm_ratings))
