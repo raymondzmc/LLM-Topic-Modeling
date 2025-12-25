@@ -194,7 +194,6 @@ def train_model(
     
     elif model_name == 'ecrtm':
         # Convert bow_corpus to BoW matrix using CountVectorizer
-        from sklearn.feature_extraction.text import CountVectorizer
         import scipy.sparse
         
         text_corpus = [' '.join(word_list) for word_list in bow_corpus]
