@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=128G
-#SBATCH --output=logs/run_bertopic.out
+#SBATCH --output=logs/run_retrieval_eval.out
 
 module load StdEnv/2023
 module load python/3.12.4
