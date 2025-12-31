@@ -39,6 +39,10 @@ GENERATIVE_LLM_MODELS = [
 METRICS = ["cv_wiki", "llm_rating", "inverted_rbo", "purity"]
 METRIC_KEYS = [f"avg/{m}" for m in METRICS]
 
+# Retrieval metrics (logged under retrieval/ prefix)
+RETRIEVAL_METRICS = ["precision@1", "precision@5", "precision@10"]
+RETRIEVAL_METRIC_KEYS = [f"retrieval/avg_{m}" for m in RETRIEVAL_METRICS]
+
 # Display names for methods
 METHOD_DISPLAY_NAMES = {
     "lda": "LDA",
@@ -138,6 +142,39 @@ def extract_seed_metrics_from_run(run, num_seeds: int = REQUIRED_NUM_SEEDS) -> d
     return seed_metrics
 
 
+def extract_retrieval_metrics_from_run(run) -> dict:
+    """Extract the retrieval metrics from a run's summary.
+    
+    Returns:
+        Dict: {metric_name: value} e.g., {'precision@1': 0.85, ...}
+    """
+    metrics = {}
+    for metric in RETRIEVAL_METRICS:
+        key = f"retrieval/avg_{metric}"
+        value = run.summary.get(key)
+        if value is not None:
+            metrics[metric] = value
+    return metrics
+
+
+def extract_retrieval_seed_metrics_from_run(run, num_seeds: int = REQUIRED_NUM_SEEDS) -> dict:
+    """Extract individual seed retrieval metrics from a run's summary.
+    
+    Returns:
+        Dict: {metric_name: [seed_0_value, seed_1_value, ...]}
+    """
+    seed_metrics = {m: [] for m in RETRIEVAL_METRICS}
+    
+    for seed in range(num_seeds):
+        for metric in RETRIEVAL_METRICS:
+            key = f"retrieval/seed_{seed}/{metric}"
+            value = run.summary.get(key)
+            if value is not None:
+                seed_metrics[metric].append(value)
+    
+    return seed_metrics
+
+
 def aggregate_metrics(runs_data: list) -> dict:
     """Aggregate metrics across multiple runs by averaging.
     
@@ -172,6 +209,44 @@ def aggregate_seed_metrics(all_seed_metrics: list) -> dict:
     aggregated = {m: [] for m in METRICS}
     for seed_metrics in all_seed_metrics:
         for metric in METRICS:
+            aggregated[metric].extend(seed_metrics.get(metric, []))
+    return aggregated
+
+
+def aggregate_retrieval_metrics(runs_data: list) -> dict:
+    """Aggregate retrieval metrics across multiple runs by averaging.
+    
+    Args:
+        runs_data: List of dicts with retrieval metric values
+        
+    Returns:
+        Dict with averaged retrieval metric values
+    """
+    if not runs_data:
+        return {m: None for m in RETRIEVAL_METRICS}
+    
+    aggregated = {}
+    for metric in RETRIEVAL_METRICS:
+        values = [r[metric] for r in runs_data if r.get(metric) is not None]
+        if values:
+            aggregated[metric] = np.mean(values)
+        else:
+            aggregated[metric] = None
+    return aggregated
+
+
+def aggregate_retrieval_seed_metrics(all_seed_metrics: list) -> dict:
+    """Aggregate retrieval seed-level metrics across multiple runs.
+    
+    Args:
+        all_seed_metrics: List of dicts, each containing {metric: [seed_values]}
+        
+    Returns:
+        Dict: {metric: flat_list_of_all_values}
+    """
+    aggregated = {m: [] for m in RETRIEVAL_METRICS}
+    for seed_metrics in all_seed_metrics:
+        for metric in RETRIEVAL_METRICS:
             aggregated[metric].extend(seed_metrics.get(metric, []))
     return aggregated
 
@@ -559,6 +634,185 @@ def build_summary_table_from_runs(all_runs: dict):
     return summary, raw_data
 
 
+def build_retrieval_table_from_runs(all_runs: dict):
+    """Build the retrieval summary table from pre-fetched wandb runs.
+    
+    Args:
+        all_runs: Dict mapping dataset name to list of runs
+    
+    Returns:
+        Tuple:
+            - summary: {method_key: {dataset: {metric: avg_value}}}
+            - raw_data: {method_key: {dataset: {metric: [all_values]}}}
+    """
+    results = defaultdict(lambda: defaultdict(list))
+    raw_seed_data = defaultdict(lambda: defaultdict(list))
+    all_method_keys = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
+    
+    for dataset in DATASETS:
+        runs = all_runs.get(dataset, [])
+        
+        for run in runs:
+            # Get method key
+            method_key = get_method_key_from_run(run)
+            if method_key is None:
+                continue
+            
+            # Check if K is in our target values
+            num_topics = run.config.get("num_topics")
+            if num_topics not in K_VALUES:
+                continue
+            
+            # Check if run has the required number of seeds
+            num_seeds = run.config.get("num_seeds", 0)
+            if num_seeds != REQUIRED_NUM_SEEDS:
+                continue
+            
+            # Extract retrieval metrics
+            metrics = extract_retrieval_metrics_from_run(run)
+            if metrics:
+                results[method_key][dataset].append(metrics)
+            
+            # Extract seed-level retrieval metrics for statistical testing
+            seed_metrics = extract_retrieval_seed_metrics_from_run(run)
+            if any(seed_metrics[m] for m in RETRIEVAL_METRICS):
+                raw_seed_data[method_key][dataset].append(seed_metrics)
+    
+    # Aggregate results
+    summary = {}
+    raw_data = {}
+    for method_key in all_method_keys:
+        summary[method_key] = {}
+        raw_data[method_key] = {}
+        for dataset in DATASETS:
+            runs_data = results[method_key][dataset]
+            summary[method_key][dataset] = aggregate_retrieval_metrics(runs_data)
+            
+            # Aggregate seed-level data
+            seed_data_list = raw_seed_data[method_key][dataset]
+            raw_data[method_key][dataset] = aggregate_retrieval_seed_metrics(seed_data_list)
+            
+            # Print debug info
+            n_runs = len(runs_data)
+            if n_runs > 0:
+                print(f"  {method_key} on {dataset}: {n_runs} runs (retrieval)")
+    
+    return summary, raw_data
+
+
+def perform_retrieval_significance_tests(raw_data: dict, method_keys: list, dataset: str, metric: str) -> dict:
+    """Perform pairwise t-tests for retrieval metrics.
+    
+    Same as perform_significance_tests but for retrieval metrics.
+    """
+    # Collect values for each method
+    method_values = {}
+    for method_key in method_keys:
+        values = raw_data.get(method_key, {}).get(dataset, {}).get(metric, [])
+        if values:
+            method_values[method_key] = np.array(values)
+    
+    if not method_values:
+        return {m: None for m in method_keys}
+    
+    # Find the method with the highest mean
+    means = {m: np.mean(v) for m, v in method_values.items()}
+    best_method = max(means, key=means.get)
+    best_values = method_values[best_method]
+    
+    results = {}
+    for method_key in method_keys:
+        if method_key not in method_values:
+            results[method_key] = None
+            continue
+        
+        if method_key == best_method:
+            results[method_key] = 'best'
+        else:
+            # Perform two-sample t-test (independent samples)
+            other_values = method_values[method_key]
+            try:
+                # Use Welch's t-test (unequal variances)
+                _, p_value = stats.ttest_ind(best_values, other_values, equal_var=False)
+                if p_value >= SIGNIFICANCE_LEVEL:
+                    # Not significantly different from the best
+                    results[method_key] = 'not_sig_diff'
+                else:
+                    results[method_key] = 'worse'
+            except Exception:
+                results[method_key] = 'worse'
+    
+    return results
+
+
+def print_retrieval_table(summary: dict, raw_data: dict = None):
+    """Print the retrieval summary table in a readable format with significance markers.
+    
+    Args:
+        summary: {method_key: {dataset: {metric: avg_value}}}
+        raw_data: {method_key: {dataset: {metric: [all_values]}}} for significance testing
+    """
+    # Header
+    metric_labels = ["P@1", "P@5", "P@10"]
+    
+    # Column widths (increased for significance markers)
+    method_width = 25
+    metric_width = 9
+    dataset_width = metric_width * len(metric_labels) + len(metric_labels) - 1
+    
+    # Order of methods in the table
+    method_order = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
+    
+    # Compute significance for each metric and dataset
+    significance = {}
+    if raw_data is not None:
+        for dataset in DATASETS:
+            significance[dataset] = {}
+            for metric in RETRIEVAL_METRICS:
+                significance[dataset][metric] = perform_retrieval_significance_tests(
+                    raw_data, method_order, dataset, metric
+                )
+    
+    # Print header row 1 (dataset names)
+    header1 = f"{'Method':<{method_width}}"
+    for dataset in DATASETS:
+        header1 += f" | {dataset:^{dataset_width}}"
+    print("\n" + "=" * len(header1))
+    print("RETRIEVAL EVALUATION (Precision@K)")
+    print("=" * len(header1))
+    print(header1)
+    
+    # Print header row 2 (metric names)
+    header2 = " " * method_width
+    for _ in DATASETS:
+        metrics_str = " ".join([f"{m:>{metric_width}}" for m in metric_labels])
+        header2 += f" | {metrics_str}"
+    print(header2)
+    print("=" * len(header1))
+    
+    # Print rows
+    for method_key in method_order:
+        display_name = METHOD_DISPLAY_NAMES.get(method_key, method_key)
+        row = f"{display_name:<{method_width}}"
+        
+        for dataset in DATASETS:
+            metrics_data = summary.get(method_key, {}).get(dataset, {})
+            values = []
+            for metric in RETRIEVAL_METRICS:
+                val = metrics_data.get(metric)
+                sig_status = None
+                if raw_data is not None:
+                    sig_status = significance.get(dataset, {}).get(metric, {}).get(method_key)
+                values.append(format_value_with_significance(val, sig_status))
+            metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
+            row += f" | {metrics_str}"
+        
+        print(row)
+    
+    print("=" * len(header1))
+    print("Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
+
+
 def main():
     print("=" * 60)
     print("WandB Summary Table Generator")
@@ -585,6 +839,11 @@ def main():
     print("\n--- Ablation Experiments Summary ---")
     ablation_summary, ablation_raw_data = build_ablation_table(all_runs)
     print_ablation_table(ablation_summary, ablation_raw_data)
+    
+    # Build and print retrieval table
+    print("\n--- Retrieval Evaluation Summary ---")
+    retrieval_summary, retrieval_raw_data = build_retrieval_table_from_runs(all_runs)
+    print_retrieval_table(retrieval_summary, retrieval_raw_data)
 
 
 if __name__ == "__main__":

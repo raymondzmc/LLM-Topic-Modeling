@@ -1,0 +1,97 @@
+============================================================
+WandB Summary Table Generator
+============================================================
+Entity: llm-topics
+Datasets: ['20_newsgroups', 'tweet_topic', 'stackoverflow']
+K values: [25, 50, 75, 100]
+Required seeds: 5
+Metrics: ['cv_wiki', 'llm_rating', 'inverted_rbo', 'purity']
+Significance level: 0.05
+============================================================
+
+Fetching runs from llm-topics/20_newsgroups...
+  Found 81 finished runs
+Fetching runs from llm-topics/tweet_topic...
+  Found 74 finished runs
+Fetching runs from llm-topics/stackoverflow...
+  Found 72 finished runs
+
+--- Main Methods Summary ---
+  lda on 20_newsgroups: 4 runs
+  lda on tweet_topic: 4 runs
+  lda on stackoverflow: 4 runs
+  prodlda on 20_newsgroups: 4 runs
+  prodlda on tweet_topic: 4 runs
+  prodlda on stackoverflow: 4 runs
+  zeroshot on 20_newsgroups: 4 runs
+  zeroshot on tweet_topic: 4 runs
+  zeroshot on stackoverflow: 4 runs
+  combined on 20_newsgroups: 4 runs
+  combined on tweet_topic: 4 runs
+  combined on stackoverflow: 4 runs
+  etm on 20_newsgroups: 4 runs
+  etm on tweet_topic: 4 runs
+  etm on stackoverflow: 4 runs
+  bertopic on 20_newsgroups: 4 runs
+  bertopic on tweet_topic: 4 runs
+  bertopic on stackoverflow: 4 runs
+  ecrtm on 20_newsgroups: 4 runs
+  ecrtm on tweet_topic: 4 runs
+  ecrtm on stackoverflow: 4 runs
+  fastopic on 20_newsgroups: 4 runs
+  fastopic on tweet_topic: 4 runs
+  fastopic on stackoverflow: 4 runs
+  generative_ERNIE-4.5-0.3B-PT on 20_newsgroups: 17 runs
+  generative_ERNIE-4.5-0.3B-PT on tweet_topic: 16 runs
+  generative_ERNIE-4.5-0.3B-PT on stackoverflow: 16 runs
+  generative_Llama-3.1-8B-Instruct on 20_newsgroups: 16 runs
+  generative_Llama-3.1-8B-Instruct on tweet_topic: 16 runs
+  generative_Llama-3.1-8B-Instruct on stackoverflow: 16 runs
+  generative_Llama-3.2-1B-Instruct on 20_newsgroups: 16 runs
+  generative_Llama-3.2-1B-Instruct on tweet_topic: 10 runs
+  generative_Llama-3.2-1B-Instruct on stackoverflow: 8 runs
+
+=======================================================================================================================================================
+Method                    |              20_newsgroups              |               tweet_topic               |              stackoverflow             
+                          |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity
+=======================================================================================================================================================
+LDA                       |     0.341     2.219     0.977     0.301 |     0.350     1.950     0.992     0.441 |     0.354     2.004     0.977     0.174
+ProdLDA                   |     0.351     2.487     0.992     0.356 |     0.355     2.113     0.994     0.533 |     0.352     2.619     0.991     0.265
+ZeroShotTM                |     0.354     2.531     0.994     0.397 |     0.356     2.302     0.994     0.573 |     0.363     2.841     0.993     0.307
+CombinedTM                |     0.351     2.565     0.993     0.391 |     0.360     2.363     0.988     0.588 |     0.364     2.853     0.986     0.306
+ETM                       |     0.344     2.346     0.934     0.360 |     0.351     2.224     0.936     0.552 |     0.348     2.285     0.934     0.151
+BERTopic                  |     0.360     2.475     0.992     0.352 |     0.364     2.194     0.996     0.562 |     0.374     2.632     0.996     0.202
+ECRTM                     |     0.360     2.282   *0.999*     0.364 |     0.356     1.853 **1.000**     0.399 |     0.373     1.946 **1.000**     0.062
+FASTopic                  |     0.358     2.589 **0.999**     0.416 |     0.276     1.956     0.626     0.557 |     0.363     2.304     0.687     0.171
+Generative (ERNIE)        | **0.379**   *2.745*     0.984     0.482 |   *0.388*     2.673     0.983     0.722 |   *0.395*     2.857     0.983 **0.585**
+Generative (Llama-8B)     |     0.366   *2.743*     0.987 **0.516** |     0.378     2.689     0.984     0.716 |     0.383     2.889     0.987   *0.557*
+Generative (Llama-1B)     |   *0.374* **2.752**     0.985   *0.515* | **0.392** **2.905**     0.985 **0.752** | **0.398** **2.930**     0.988   *0.583*
+=======================================================================================================================================================
+Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)
+
+--- Ablation Experiments Summary ---
+  original on 20_newsgroups: 4 runs
+  original on tweet_topic: 4 runs
+  original on stackoverflow: 4 runs
+  bow_target on 20_newsgroups: 4 runs
+  bow_target on tweet_topic: 4 runs
+  bow_target on stackoverflow: 4 runs
+  contextualized_embeddings on 20_newsgroups: 4 runs
+  contextualized_embeddings on tweet_topic: 4 runs
+  contextualized_embeddings on stackoverflow: 4 runs
+  nll_loss on 20_newsgroups: 5 runs
+  nll_loss on tweet_topic: 4 runs
+  nll_loss on stackoverflow: 4 runs
+
+=======================================================================================================================================================
+ABLATION EXPERIMENTS (ERNIE only)
+=======================================================================================================================================================
+Ablation                  |              20_newsgroups              |               tweet_topic               |              stackoverflow             
+                          |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity
+=======================================================================================================================================================
+Original (Ours)           |     0.381 **2.863**   *0.991* **0.520** |     0.392 **2.898**     0.989 **0.781** |     0.397 **2.920**     0.986 **0.737**
+BoW Target                |     0.339     2.478 **0.991**     0.432 |     0.357     2.153 **0.994**     0.624 |     0.369     2.771 **0.993**     0.374
+Contextualized Embeddings |     0.381   *2.855*     0.988   *0.513* |     0.396   *2.880*     0.985     0.721 |     0.396     2.903     0.979     0.513
+NLL Loss                  | **0.407**     2.778     0.969     0.468 | **0.406**     2.762     0.965     0.762 | **0.419**     2.834     0.976     0.716
+=======================================================================================================================================================
+Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)
