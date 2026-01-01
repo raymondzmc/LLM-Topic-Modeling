@@ -120,7 +120,7 @@ class GenerativeTM(object):
         lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, num_samples=10,
         reduce_on_plateau=False, topic_prior_mean=0.0, top_words=10,
         topic_prior_variance=None, num_data_loader_workers=0, loss_weight=1.0,
-        sparsity_ratio=1.0, temperature=1.0, loss_type='CE'):
+        sparsity_ratio=1.0, temperature=1.0, loss_type='KL'):
 
         """
         :param vocab_size: int, vocabulary size (target dimension for reconstruction)
