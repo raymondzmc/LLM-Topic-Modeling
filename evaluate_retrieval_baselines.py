@@ -15,12 +15,27 @@ import torch
 from tqdm import tqdm
 from collections import Counter, defaultdict
 
+from sklearn.metrics.pairwise import cosine_similarity
+from scipy.special import softmax
+
 from data.loaders import load_or_download_dataset
 from evaluate_retrieval import (
     compute_pairwise_kl_divergence_torch,
     compute_precision_at_k,
     apply_subsetting,
 )
+
+
+def compute_pairwise_cosine_similarity(X: np.ndarray) -> np.ndarray:
+    """Compute pairwise cosine similarity matrix.
+    
+    Args:
+        X: Document representations (n_docs, n_features)
+        
+    Returns:
+        np.ndarray: Pairwise cosine similarity matrix (n_docs, n_docs)
+    """
+    return cosine_similarity(X)
 
 
 def bow_to_term_frequency(bow_strings: list, vocab: list) -> np.ndarray:
@@ -50,13 +65,13 @@ def bow_to_term_frequency(bow_strings: list, vocab: list) -> np.ndarray:
 
 
 def load_llm_targets(dataset) -> np.ndarray:
-    """Load LLM next-token logits from dataset.
+    """Load LLM next-token logits from dataset and convert to probabilities.
     
     Args:
         dataset: HuggingFace dataset with 'next_word_logits' column
         
     Returns:
-        np.ndarray of shape (n_docs, vocab_size) with logits
+        np.ndarray of shape (n_docs, vocab_size) with softmax probabilities
     """
     n_docs = len(dataset)
     first_logits = np.array(dataset[0]['next_word_logits'])
@@ -67,13 +82,18 @@ def load_llm_targets(dataset) -> np.ndarray:
     for i, item in enumerate(tqdm(dataset, desc="Loading LLM targets")):
         logits_matrix[i] = np.array(item['next_word_logits'])
     
-    return logits_matrix
+    # Apply softmax to convert logits to probability distributions
+    print("Applying softmax to convert logits to probabilities...")
+    prob_matrix = softmax(logits_matrix, axis=1)
+    
+    return prob_matrix
 
 
 def evaluate_retrieval_baseline(
     representation: np.ndarray,
     labels: np.ndarray,
     device: torch.device,
+    baseline_type: str,
     subset_size: int = None,
 ) -> dict:
     """Evaluate retrieval using a given representation.
@@ -82,6 +102,7 @@ def evaluate_retrieval_baseline(
         representation: Document representations (n_docs, n_features)
         labels: Document labels
         device: Torch device
+        baseline_type: 'bow' (uses cosine similarity) or 'llm_targets' (uses KL divergence)
         subset_size: Optional subsetting for balanced evaluation
         
     Returns:
@@ -94,26 +115,36 @@ def evaluate_retrieval_baseline(
     n_docs = len(labels)
     print(f"Evaluating retrieval on {n_docs} documents...")
     
-    # Convert to tensor
-    representation_tensor = torch.tensor(representation, dtype=torch.float32)
+    # Compute similarity/distance matrix based on baseline type
+    if baseline_type == 'bow':
+        # BoW: Use cosine similarity (higher = more similar)
+        print("Computing pairwise cosine similarity...")
+        similarity_matrix = compute_pairwise_cosine_similarity(representation)
+        use_similarity = True  # Higher is better
+    else:
+        # LLM targets: Use KL divergence (lower = more similar)
+        print("Computing pairwise KL divergence...")
+        representation_tensor = torch.tensor(representation, dtype=torch.float32)
+        similarity_matrix = compute_pairwise_kl_divergence_torch(representation_tensor, device).numpy()
+        use_similarity = False  # Lower is better (it's a distance)
     
-    # Compute pairwise KL divergence
-    print("Computing pairwise KL divergence...")
-    kl_matrix = compute_pairwise_kl_divergence_torch(representation_tensor, device)
-    
-    # For each document, rank others by KL divergence (lower = more similar)
+    # For each document, rank others by similarity/distance
     print("Computing precision@k...")
     all_results = defaultdict(list)
     
     for i in tqdm(range(n_docs), desc="Precision@k"):
-        # Get KL divergences from document i to all others
-        kl_row = kl_matrix[i].numpy()
+        row = similarity_matrix[i].copy()
         
-        # Exclude self (set to infinity)
-        kl_row[i] = float('inf')
-        
-        # Sort by KL divergence (ascending = most similar first)
-        retrieved_indices = np.argsort(kl_row)
+        if use_similarity:
+            # Exclude self (set to -infinity for similarity)
+            row[i] = float('-inf')
+            # Sort by similarity (descending = most similar first)
+            retrieved_indices = np.argsort(row)[::-1]
+        else:
+            # Exclude self (set to infinity for distance)
+            row[i] = float('inf')
+            # Sort by distance (ascending = most similar first)
+            retrieved_indices = np.argsort(row)
         
         # Compute precision@k
         results = compute_precision_at_k(retrieved_indices, labels[i], labels)
@@ -160,6 +191,7 @@ def main(args):
         representation=representation,
         labels=labels,
         device=device,
+        baseline_type=args.baseline,
         subset_size=args.subset_size,
     )
     
