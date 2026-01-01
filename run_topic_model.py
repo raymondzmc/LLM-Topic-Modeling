@@ -514,6 +514,8 @@ def run(args: argparse.Namespace):
             run_name += f"_{ablation_emb_name}"
         if args.loss_type == 'CE':
             run_name += "_CE"
+        if args.sparsity_ratio != 1.0:
+            run_name += f"_sparsity{args.sparsity_ratio}"
 
     wb_run = wandb.init(
         project=wandb_project,
