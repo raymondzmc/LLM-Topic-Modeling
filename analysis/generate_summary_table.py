@@ -43,6 +43,22 @@ METRIC_KEYS = [f"avg/{m}" for m in METRICS]
 RETRIEVAL_METRICS = ["precision@1", "precision@5", "precision@10"]
 RETRIEVAL_METRIC_KEYS = [f"retrieval/avg_{m}" for m in RETRIEVAL_METRICS]
 
+# Retrieval baselines (evaluated separately, not topic models)
+# BoW is averaged across LLM models (results are identical)
+# LLM targets are shown separately per LLM model
+RETRIEVAL_BASELINES_AVERAGED = ["bow"]
+RETRIEVAL_BASELINES_PER_LLM = ["llm_targets"]
+RETRIEVAL_BASELINE_KEYS = (
+    ["bow"] + 
+    [f"llm_targets_{llm}" for llm in GENERATIVE_LLM_MODELS]
+)
+RETRIEVAL_BASELINE_DISPLAY_NAMES = {
+    "bow": "BoW (Baseline)",
+    "llm_targets_ERNIE-4.5-0.3B-PT": "LLM Targets (ERNIE)",
+    "llm_targets_Llama-3.1-8B-Instruct": "LLM Targets (Llama-8B)",
+    "llm_targets_Llama-3.2-1B-Instruct": "LLM Targets (Llama-1B)",
+}
+
 # Display names for methods
 METHOD_DISPLAY_NAMES = {
     "lda": "LDA",
@@ -700,6 +716,89 @@ def build_retrieval_table_from_runs(all_runs: dict):
     return summary, raw_data
 
 
+def build_baseline_retrieval_table(all_runs: dict):
+    """Build the retrieval baseline summary table from pre-fetched wandb runs.
+    
+    Baselines are runs with names starting with 'baseline_'.
+    - BoW: averaged across LLM models (results are identical)
+    - LLM targets: shown separately per LLM model
+    
+    Args:
+        all_runs: Dict mapping dataset name to list of runs
+    
+    Returns:
+        Dict: {baseline_key: {dataset: {metric: avg_value}}}
+        Where baseline_key is 'bow' or 'llm_targets_{LLM_MODEL}'
+    """
+    # Collect results: {baseline_key: {dataset: [metrics_dicts]}}
+    results = defaultdict(lambda: defaultdict(list))
+    
+    for dataset in DATASETS:
+        runs = all_runs.get(dataset, [])
+        
+        for run in runs:
+            # Only process baseline runs
+            if not run.name.startswith("baseline_"):
+                continue
+            
+            # Extract baseline type from config
+            baseline_type = run.config.get("baseline")
+            if baseline_type is None:
+                continue
+            
+            # Determine the baseline key
+            if baseline_type in RETRIEVAL_BASELINES_AVERAGED:
+                # BoW: use as-is (will be averaged)
+                baseline_key = baseline_type
+            elif baseline_type in RETRIEVAL_BASELINES_PER_LLM:
+                # LLM targets: extract LLM model from run name
+                llm_model = None
+                for llm in GENERATIVE_LLM_MODELS:
+                    if llm in run.name:
+                        llm_model = llm
+                        break
+                if llm_model is None:
+                    continue
+                baseline_key = f"{baseline_type}_{llm_model}"
+            else:
+                continue
+            
+            # Extract retrieval metrics from summary
+            metrics = {}
+            for metric in RETRIEVAL_METRICS:
+                key = f"retrieval/{metric}"
+                value = run.summary.get(key)
+                if value is not None:
+                    metrics[metric] = value
+            
+            if metrics:
+                results[baseline_key][dataset].append(metrics)
+    
+    # Aggregate results
+    summary = {}
+    for baseline_key in RETRIEVAL_BASELINE_KEYS:
+        summary[baseline_key] = {}
+        for dataset in DATASETS:
+            runs_data = results[baseline_key][dataset]
+            if runs_data:
+                aggregated = {}
+                for metric in RETRIEVAL_METRICS:
+                    values = [r[metric] for r in runs_data if r.get(metric) is not None]
+                    if values:
+                        aggregated[metric] = np.mean(values)
+                    else:
+                        aggregated[metric] = None
+                summary[baseline_key][dataset] = aggregated
+                
+                # Debug info
+                n_runs = len(runs_data)
+                print(f"  {baseline_key} on {dataset}: {n_runs} runs (baseline)")
+            else:
+                summary[baseline_key][dataset] = {m: None for m in RETRIEVAL_METRICS}
+    
+    return summary
+
+
 def perform_retrieval_significance_tests(raw_data: dict, method_keys: list, dataset: str, metric: str) -> dict:
     """Perform pairwise t-tests for retrieval metrics.
     
@@ -745,12 +844,13 @@ def perform_retrieval_significance_tests(raw_data: dict, method_keys: list, data
     return results
 
 
-def print_retrieval_table(summary: dict, raw_data: dict = None):
+def print_retrieval_table(summary: dict, raw_data: dict = None, baseline_summary: dict = None):
     """Print the retrieval summary table in a readable format with significance markers.
     
     Args:
         summary: {method_key: {dataset: {metric: avg_value}}}
         raw_data: {method_key: {dataset: {metric: [all_values]}}} for significance testing
+        baseline_summary: {baseline_type: {dataset: {metric: avg_value}}} for baselines
     """
     # Header
     metric_labels = ["P@1", "P@5", "P@10"]
@@ -790,7 +890,7 @@ def print_retrieval_table(summary: dict, raw_data: dict = None):
     print(header2)
     print("=" * len(header1))
     
-    # Print rows
+    # Print topic model rows
     for method_key in method_order:
         display_name = METHOD_DISPLAY_NAMES.get(method_key, method_key)
         row = f"{display_name:<{method_width}}"
@@ -809,8 +909,202 @@ def print_retrieval_table(summary: dict, raw_data: dict = None):
         
         print(row)
     
+    # Print baseline rows if available
+    if baseline_summary:
+        print("-" * len(header1))
+        for baseline_key in RETRIEVAL_BASELINE_KEYS:
+            display_name = RETRIEVAL_BASELINE_DISPLAY_NAMES.get(baseline_key, baseline_key)
+            row = f"{display_name:<{method_width}}"
+            
+            for dataset in DATASETS:
+                metrics_data = baseline_summary.get(baseline_key, {}).get(dataset, {})
+                values = []
+                for metric in RETRIEVAL_METRICS:
+                    val = metrics_data.get(metric)
+                    values.append(format_value(val))
+                metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
+                row += f" | {metrics_str}"
+            
+            print(row)
+    
     print("=" * len(header1))
     print("Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
+
+
+def build_retrieval_table_per_k(all_runs: dict, k_value: int):
+    """Build retrieval summary table for a specific K value.
+    
+    Args:
+        all_runs: Dict mapping dataset name to list of runs
+        k_value: The specific K value to filter by
+    
+    Returns:
+        Tuple:
+            - summary: {method_key: {dataset: {metric: avg_value}}}
+            - raw_data: {method_key: {dataset: {metric: [all_seed_values]}}}
+    """
+    results = defaultdict(lambda: defaultdict(list))
+    raw_seed_data = defaultdict(lambda: defaultdict(list))
+    all_method_keys = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
+    
+    for dataset in DATASETS:
+        runs = all_runs.get(dataset, [])
+        
+        for run in runs:
+            # Get method key
+            method_key = get_method_key_from_run(run)
+            if method_key is None:
+                continue
+            
+            # Filter by K value
+            num_topics = run.config.get("num_topics")
+            if num_topics != k_value:
+                continue
+            
+            # Check if run has the required number of seeds
+            num_seeds = run.config.get("num_seeds", 0)
+            if num_seeds != REQUIRED_NUM_SEEDS:
+                continue
+            
+            # Extract average retrieval metrics
+            metrics = extract_retrieval_metrics_from_run(run)
+            if metrics:
+                results[method_key][dataset].append(metrics)
+            
+            # Extract per-seed retrieval metrics for significance testing
+            seed_metrics = extract_retrieval_seed_metrics_from_run(run)
+            if any(seed_metrics[m] for m in RETRIEVAL_METRICS):
+                raw_seed_data[method_key][dataset].append(seed_metrics)
+    
+    # Aggregate results
+    summary = {}
+    raw_data = {}
+    for method_key in all_method_keys:
+        summary[method_key] = {}
+        raw_data[method_key] = {}
+        for dataset in DATASETS:
+            runs_data = results[method_key][dataset]
+            if runs_data:
+                aggregated = {}
+                for metric in RETRIEVAL_METRICS:
+                    values = [r[metric] for r in runs_data if r.get(metric) is not None]
+                    if values:
+                        aggregated[metric] = np.mean(values)
+                    else:
+                        aggregated[metric] = None
+                summary[method_key][dataset] = aggregated
+            else:
+                summary[method_key][dataset] = {m: None for m in RETRIEVAL_METRICS}
+            
+            # Aggregate seed-level data
+            seed_data_list = raw_seed_data[method_key][dataset]
+            raw_data[method_key][dataset] = aggregate_retrieval_seed_metrics(seed_data_list)
+    
+    return summary, raw_data
+
+
+def print_retrieval_table_compact(summary: dict, k_value: int, raw_data: dict = None, baseline_summary: dict = None):
+    """Print a compact retrieval table for a specific K value with significance markers.
+    
+    Args:
+        summary: {method_key: {dataset: {metric: avg_value}}}
+        k_value: The K value for this table
+        raw_data: {method_key: {dataset: {metric: [all_values]}}} for significance testing
+        baseline_summary: {baseline_key: {dataset: {metric: avg_value}}} for baselines
+    """
+    # Header
+    metric_labels = ["P@1", "P@5", "P@10"]
+    
+    # Column widths (increased for significance markers)
+    method_width = 25
+    metric_width = 9
+    dataset_width = metric_width * len(metric_labels) + len(metric_labels) - 1
+    
+    # Order of methods in the table
+    method_order = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
+    
+    # Compute significance for each metric and dataset (topic models only)
+    significance = {}
+    if raw_data is not None:
+        for dataset in DATASETS:
+            significance[dataset] = {}
+            for metric in RETRIEVAL_METRICS:
+                significance[dataset][metric] = perform_retrieval_significance_tests(
+                    raw_data, method_order, dataset, metric
+                )
+    
+    # Print header
+    header1 = f"{'Method':<{method_width}}"
+    for dataset in DATASETS:
+        header1 += f" | {dataset:^{dataset_width}}"
+    print(f"\n--- K = {k_value} ---")
+    print("-" * len(header1))
+    print(header1)
+    
+    # Print header row 2 (metric names)
+    header2 = " " * method_width
+    for _ in DATASETS:
+        metrics_str = " ".join([f"{m:>{metric_width}}" for m in metric_labels])
+        header2 += f" | {metrics_str}"
+    print(header2)
+    print("-" * len(header1))
+    
+    # Print topic model rows with significance markers
+    for method_key in method_order:
+        display_name = METHOD_DISPLAY_NAMES.get(method_key, method_key)
+        row = f"{display_name:<{method_width}}"
+        
+        for dataset in DATASETS:
+            metrics_data = summary.get(method_key, {}).get(dataset, {})
+            values = []
+            for metric in RETRIEVAL_METRICS:
+                val = metrics_data.get(metric)
+                sig_status = None
+                if raw_data is not None:
+                    sig_status = significance.get(dataset, {}).get(metric, {}).get(method_key)
+                values.append(format_value_with_significance(val, sig_status))
+            metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
+            row += f" | {metrics_str}"
+        
+        print(row)
+    
+    # Print baseline rows if available (no significance markers - reference only)
+    if baseline_summary:
+        print("-" * len(header1))
+        for baseline_key in RETRIEVAL_BASELINE_KEYS:
+            display_name = RETRIEVAL_BASELINE_DISPLAY_NAMES.get(baseline_key, baseline_key)
+            row = f"{display_name:<{method_width}}"
+            
+            for dataset in DATASETS:
+                metrics_data = baseline_summary.get(baseline_key, {}).get(dataset, {})
+                values = []
+                for metric in RETRIEVAL_METRICS:
+                    val = metrics_data.get(metric)
+                    values.append(format_value(val))
+                metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
+                row += f" | {metrics_str}"
+            
+            print(row)
+    
+    print("-" * len(header1))
+
+
+def print_retrieval_tables_per_k(all_runs: dict, baseline_summary: dict = None):
+    """Print retrieval tables for each K value with significance testing.
+    
+    Args:
+        all_runs: Dict mapping dataset name to list of runs
+        baseline_summary: Baseline results (same for all K values)
+    """
+    print("\n" + "=" * 120)
+    print("RETRIEVAL EVALUATION BY K (with significance testing)")
+    print("=" * 120)
+    
+    for k_value in K_VALUES:
+        summary, raw_data = build_retrieval_table_per_k(all_runs, k_value)
+        print_retrieval_table_compact(summary, k_value, raw_data, baseline_summary)
+    
+    print("\nLegend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
 
 
 def main():
@@ -843,7 +1137,11 @@ def main():
     # Build and print retrieval table
     print("\n--- Retrieval Evaluation Summary ---")
     retrieval_summary, retrieval_raw_data = build_retrieval_table_from_runs(all_runs)
-    print_retrieval_table(retrieval_summary, retrieval_raw_data)
+    baseline_summary = build_baseline_retrieval_table(all_runs)
+    print_retrieval_table(retrieval_summary, retrieval_raw_data, baseline_summary)
+    
+    # Print per-K retrieval tables
+    print_retrieval_tables_per_k(all_runs, baseline_summary)
 
 
 if __name__ == "__main__":
