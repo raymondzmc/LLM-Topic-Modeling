@@ -74,8 +74,7 @@ METHOD_DISPLAY_NAMES = {
     "generative_Llama-3.2-1B-Instruct": "Generative (Llama-1B)",
 }
 
-# Ablation experiment configuration (ERNIE only)
-ABLATION_LLM_MODEL = "ERNIE-4.5-0.3B-PT"
+# Ablation experiment configuration
 ABLATION_TYPES = ["original", "bow_target", "contextualized_embeddings", "nll_loss"]
 ABLATION_DISPLAY_NAMES = {
     "original": "Original (Ours)",
@@ -90,6 +89,7 @@ def get_method_key_from_run(run):
     
     For baseline methods, returns config.model.
     For generative methods, returns 'generative_{LLM_MODEL}'.
+    Only includes original generative runs (excludes ablation variants).
     """
     model = run.config.get("model", "")
     
@@ -98,6 +98,13 @@ def get_method_key_from_run(run):
         run_name = run.name
         for llm_model in GENERATIVE_LLM_MODELS:
             if f"generative_{llm_model}_K" in run_name:
+                # Exclude ablation variants - only include original runs
+                if "_bow-target" in run_name:
+                    return None
+                if "_gte-large-en-v1.5" in run_name:
+                    return None
+                if run_name.endswith("_CE"):
+                    return None
                 return f"generative_{llm_model}"
         # If no match found, return None to skip this run
         return None
@@ -268,7 +275,7 @@ def aggregate_retrieval_seed_metrics(all_seed_metrics: list) -> dict:
 
 
 def perform_significance_tests(raw_data: dict, method_keys: list, dataset: str, metric: str) -> dict:
-    """Perform pairwise t-tests to find the best method and methods not significantly different.
+    """Perform pairwise t-tests to find best and worst methods and methods not significantly different.
     
     Args:
         raw_data: {method_key: {dataset: {metric: [values]}}}
@@ -277,7 +284,8 @@ def perform_significance_tests(raw_data: dict, method_keys: list, dataset: str, 
         metric: Metric name
         
     Returns:
-        Dict: {method_key: 'best' | 'not_sig_diff' | 'worse' | None}
+        Dict: {method_key: {'best': status, 'worst': status}}
+        where status is 'is_extreme' | 'not_sig_diff' | 'different' | None
     """
     # Collect values for each method
     method_values = {}
@@ -287,63 +295,211 @@ def perform_significance_tests(raw_data: dict, method_keys: list, dataset: str, 
             method_values[method_key] = np.array(values)
     
     if not method_values:
-        return {m: None for m in method_keys}
+        return {m: {'best': None, 'worst': None} for m in method_keys}
     
-    # Find the method with the highest mean
+    # Find the method with the highest and lowest mean
     means = {m: np.mean(v) for m, v in method_values.items()}
     best_method = max(means, key=means.get)
+    worst_method = min(means, key=means.get)
     best_values = method_values[best_method]
+    worst_values = method_values[worst_method]
     
     results = {}
     for method_key in method_keys:
         if method_key not in method_values:
-            results[method_key] = None
+            results[method_key] = {'best': None, 'worst': None}
             continue
         
+        # Test against best
         if method_key == best_method:
-            results[method_key] = 'best'
+            best_status = 'is_extreme'
         else:
-            # Perform two-sample t-test (independent samples)
             other_values = method_values[method_key]
             try:
-                # Use Welch's t-test (unequal variances)
                 _, p_value = stats.ttest_ind(best_values, other_values, equal_var=False)
                 if p_value >= SIGNIFICANCE_LEVEL:
-                    # Not significantly different from the best
-                    results[method_key] = 'not_sig_diff'
+                    best_status = 'not_sig_diff'
                 else:
-                    results[method_key] = 'worse'
+                    best_status = 'different'
             except Exception:
-                results[method_key] = 'worse'
+                best_status = 'different'
+        
+        # Test against worst
+        if method_key == worst_method:
+            worst_status = 'is_extreme'
+        else:
+            other_values = method_values[method_key]
+            try:
+                _, p_value = stats.ttest_ind(worst_values, other_values, equal_var=False)
+                if p_value >= SIGNIFICANCE_LEVEL:
+                    worst_status = 'not_sig_diff'
+                else:
+                    worst_status = 'different'
+            except Exception:
+                worst_status = 'different'
+        
+        results[method_key] = {'best': best_status, 'worst': worst_status}
     
     return results
 
 
-def format_value_with_significance(value, sig_status, decimals=3):
+def perform_ablation_significance_tests(raw_data: dict, method_keys: list, dataset: str, metric: str) -> dict:
+    """Perform pairwise t-tests to find best and worst methods and methods not significantly different.
+    
+    For ablation studies, we want to identify:
+    - The best method (highest mean)
+    - Methods not significantly different from the best
+    - The worst method (lowest mean)
+    - Methods not significantly different from the worst
+    
+    Args:
+        raw_data: {method_key: {dataset: {metric: [values]}}}
+        method_keys: List of method keys to compare
+        dataset: Dataset name
+        metric: Metric name
+        
+    Returns:
+        Dict: {method_key: {'best': status, 'worst': status}}
+        where status is 'is_extreme' | 'not_sig_diff' | 'different' | None
+    """
+    # Collect values for each method
+    method_values = {}
+    for method_key in method_keys:
+        values = raw_data.get(method_key, {}).get(dataset, {}).get(metric, [])
+        if values:
+            method_values[method_key] = np.array(values)
+    
+    if not method_values:
+        return {m: {'best': None, 'worst': None} for m in method_keys}
+    
+    # Find the method with the highest and lowest mean
+    means = {m: np.mean(v) for m, v in method_values.items()}
+    best_method = max(means, key=means.get)
+    worst_method = min(means, key=means.get)
+    best_values = method_values[best_method]
+    worst_values = method_values[worst_method]
+    
+    results = {}
+    for method_key in method_keys:
+        if method_key not in method_values:
+            results[method_key] = {'best': None, 'worst': None}
+            continue
+        
+        # Test against best
+        if method_key == best_method:
+            best_status = 'is_extreme'
+        else:
+            other_values = method_values[method_key]
+            try:
+                _, p_value = stats.ttest_ind(best_values, other_values, equal_var=False)
+                if p_value >= SIGNIFICANCE_LEVEL:
+                    best_status = 'not_sig_diff'
+                else:
+                    best_status = 'different'
+            except Exception:
+                best_status = 'different'
+        
+        # Test against worst
+        if method_key == worst_method:
+            worst_status = 'is_extreme'
+        else:
+            other_values = method_values[method_key]
+            try:
+                _, p_value = stats.ttest_ind(worst_values, other_values, equal_var=False)
+                if p_value >= SIGNIFICANCE_LEVEL:
+                    worst_status = 'not_sig_diff'
+                else:
+                    worst_status = 'different'
+            except Exception:
+                worst_status = 'different'
+        
+        results[method_key] = {'best': best_status, 'worst': worst_status}
+    
+    return results
+
+
+def format_value_with_significance(value, best_status, worst_status, decimals=3):
     """Format a metric value with significance markers.
     
     Args:
         value: The metric value
-        sig_status: 'best', 'not_sig_diff', 'worse', or None
+        best_status: 'is_extreme' | 'not_sig_diff' | 'different' | None (status vs. best)
+        worst_status: 'is_extreme' | 'not_sig_diff' | 'different' | None (status vs. worst)
         decimals: Number of decimal places
         
     Returns:
         Formatted string with markers:
-        - **value** for best
-        - *value* for not significantly different from best
-        - value for worse
+        - **value** for best or not significantly different from best
+        - ~value~ for not significantly different from worst
+        - **~value~** for indistinguishable from both best and worst
+        - value (plain) otherwise
     """
     if value is None:
         return "-"
     
     formatted = f"{value:.{decimals}f}"
     
-    if sig_status == 'best':
+    # Determine if indistinguishable from best
+    best_marker = best_status == 'is_extreme' or best_status == 'not_sig_diff'
+    # Determine if indistinguishable from worst
+    worst_marker = worst_status == 'is_extreme' or worst_status == 'not_sig_diff'
+    
+    # Both markers (indistinguishable from both)
+    if best_marker and worst_marker:
+        return f"**~{formatted}~**"
+    
+    # Only best marker
+    if best_marker:
         return f"**{formatted}**"
-    elif sig_status == 'not_sig_diff':
-        return f"*{formatted}*"
-    else:
-        return formatted
+    
+    # Only worst marker
+    if worst_marker:
+        return f"~{formatted}~"
+    
+    # Neither marker
+    return formatted
+
+
+def format_ablation_value_with_significance(value, best_status, worst_status, decimals=3):
+    """Format a metric value with significance markers for ablation studies.
+    
+    Args:
+        value: The metric value
+        best_status: 'is_extreme' | 'not_sig_diff' | 'different' | None (status vs. best)
+        worst_status: 'is_extreme' | 'not_sig_diff' | 'different' | None (status vs. worst)
+        decimals: Number of decimal places
+        
+    Returns:
+        Formatted string with markers:
+        - **value** for best or not significantly different from best
+        - ~value~ for not significantly different from worst
+        - **~value~** for indistinguishable from both best and worst
+        - value (plain) otherwise
+    """
+    if value is None:
+        return "-"
+    
+    formatted = f"{value:.{decimals}f}"
+    
+    # Determine if indistinguishable from best
+    best_marker = best_status == 'is_extreme' or best_status == 'not_sig_diff'
+    # Determine if indistinguishable from worst
+    worst_marker = worst_status == 'is_extreme' or worst_status == 'not_sig_diff'
+    
+    # Both markers (indistinguishable from both)
+    if best_marker and worst_marker:
+        return f"**~{formatted}~**"
+    
+    # Only best marker
+    if best_marker:
+        return f"**{formatted}**"
+    
+    # Only worst marker
+    if worst_marker:
+        return f"~{formatted}~"
+    
+    # Neither marker
+    return formatted
 
 
 def format_value(value, decimals=3):
@@ -406,30 +562,37 @@ def print_summary_table(summary: dict, raw_data: dict = None):
             values = []
             for metric in METRICS:
                 val = metrics_data.get(metric)
-                sig_status = None
+                best_status = None
+                worst_status = None
                 if raw_data is not None:
-                    sig_status = significance.get(dataset, {}).get(metric, {}).get(method_key)
-                values.append(format_value_with_significance(val, sig_status))
+                    sig_result = significance.get(dataset, {}).get(metric, {}).get(method_key, {})
+                    best_status = sig_result.get('best')
+                    worst_status = sig_result.get('worst')
+                values.append(format_value_with_significance(val, best_status, worst_status))
             metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
             row += f" | {metrics_str}"
         
         print(row)
     
     print("=" * len(header1))
-    print("Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
+    print("Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)")
 
 
-def get_ablation_key_from_run(run) -> Optional[str]:
+def get_ablation_key_from_run(run, llm_model: str) -> Optional[str]:
     """Extract ablation type key from a wandb run.
     
-    Only considers ERNIE generative runs.
-    Returns None for non-ERNIE runs.
+    Only considers generative runs for the specified LLM model.
+    Returns None for runs that don't match the specified model.
+    
+    Args:
+        run: WandB run object
+        llm_model: LLM model to filter by (e.g., "ERNIE-4.5-0.3B-PT")
     
     Run name patterns:
-    - Original: generative_ERNIE-4.5-0.3B-PT_K{num} (no ablation suffix)
-    - BoW Target: generative_ERNIE-4.5-0.3B-PT_K{num}_bow-target_CE
-    - Contextualized Embeddings: generative_ERNIE-4.5-0.3B-PT_K{num}_gte-large-en-v1.5
-    - NLL Loss: generative_ERNIE-4.5-0.3B-PT_K{num}_CE (only _CE, no other suffix)
+    - Original: generative_{LLM_MODEL}_K{num} (no ablation suffix)
+    - BoW Target: generative_{LLM_MODEL}_K{num}_bow-target_CE
+    - Contextualized Embeddings: generative_{LLM_MODEL}_K{num}_gte-large-en-v1.5
+    - NLL Loss: generative_{LLM_MODEL}_K{num}_CE (only _CE, no other suffix)
     """
     model = run.config.get("model", "")
     if model != "generative":
@@ -437,8 +600,8 @@ def get_ablation_key_from_run(run) -> Optional[str]:
     
     run_name = run.name
     
-    # Only consider ERNIE runs
-    if ABLATION_LLM_MODEL not in run_name:
+    # Only consider runs for the specified LLM model
+    if llm_model not in run_name:
         return None
     
     # Check for ablation patterns (order matters - check more specific patterns first)
@@ -454,11 +617,12 @@ def get_ablation_key_from_run(run) -> Optional[str]:
         return "original"
 
 
-def build_ablation_table(all_runs: dict):
-    """Build the ablation summary table from wandb runs.
+def build_ablation_table(all_runs: dict, llm_model: str):
+    """Build the ablation summary table from wandb runs for a specific LLM model.
     
     Args:
         all_runs: Dict mapping dataset name to list of runs (pre-fetched)
+        llm_model: LLM model to filter by (e.g., "ERNIE-4.5-0.3B-PT")
     
     Returns:
         Tuple:
@@ -472,8 +636,8 @@ def build_ablation_table(all_runs: dict):
         runs = all_runs.get(dataset, [])
         
         for run in runs:
-            # Get ablation key
-            ablation_key = get_ablation_key_from_run(run)
+            # Get ablation key for this LLM model
+            ablation_key = get_ablation_key_from_run(run, llm_model)
             if ablation_key is None:
                 continue
             
@@ -514,16 +678,17 @@ def build_ablation_table(all_runs: dict):
             # Print debug info
             n_runs = len(runs_data)
             if n_runs > 0:
-                print(f"  {ablation_key} on {dataset}: {n_runs} runs")
+                print(f"  {llm_model}/{ablation_key} on {dataset}: {n_runs} runs")
     
     return summary, raw_data
 
 
-def print_ablation_table(summary: dict, raw_data: dict = None):
+def print_ablation_table(summary: dict, llm_model: str, raw_data: dict = None):
     """Print the ablation summary table in a readable format with significance markers.
     
     Args:
         summary: {ablation_type: {dataset: {metric: avg_value}}}
+        llm_model: LLM model name to display in header
         raw_data: {ablation_type: {dataset: {metric: [all_values]}}} for significance testing
     """
     # Header
@@ -540,7 +705,7 @@ def print_ablation_table(summary: dict, raw_data: dict = None):
         for dataset in DATASETS:
             significance[dataset] = {}
             for metric in METRICS:
-                significance[dataset][metric] = perform_significance_tests(
+                significance[dataset][metric] = perform_ablation_significance_tests(
                     raw_data, ABLATION_TYPES, dataset, metric
                 )
     
@@ -549,7 +714,7 @@ def print_ablation_table(summary: dict, raw_data: dict = None):
     for dataset in DATASETS:
         header1 += f" | {dataset:^{dataset_width}}"
     print("\n" + "=" * len(header1))
-    print("ABLATION EXPERIMENTS (ERNIE only)")
+    print(f"ABLATION EXPERIMENTS ({llm_model})")
     print("=" * len(header1))
     print(header1)
     
@@ -571,17 +736,20 @@ def print_ablation_table(summary: dict, raw_data: dict = None):
             values = []
             for metric in METRICS:
                 val = metrics_data.get(metric)
-                sig_status = None
+                best_status = None
+                worst_status = None
                 if raw_data is not None:
-                    sig_status = significance.get(dataset, {}).get(metric, {}).get(ablation_key)
-                values.append(format_value_with_significance(val, sig_status))
+                    sig_result = significance.get(dataset, {}).get(metric, {}).get(ablation_key, {})
+                    best_status = sig_result.get('best')
+                    worst_status = sig_result.get('worst')
+                values.append(format_ablation_value_with_significance(val, best_status, worst_status))
             metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
             row += f" | {metrics_str}"
         
         print(row)
     
     print("=" * len(header1))
-    print("Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
+    print("Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)")
 
 
 def build_summary_table_from_runs(all_runs: dict):
@@ -802,7 +970,11 @@ def build_baseline_retrieval_table(all_runs: dict):
 def perform_retrieval_significance_tests(raw_data: dict, method_keys: list, dataset: str, metric: str) -> dict:
     """Perform pairwise t-tests for retrieval metrics.
     
-    Same as perform_significance_tests but for retrieval metrics.
+    Tests against both best and worst methods.
+    
+    Returns:
+        Dict: {method_key: {'best': status, 'worst': status}}
+        where status is 'is_extreme' | 'not_sig_diff' | 'different' | None
     """
     # Collect values for each method
     method_values = {}
@@ -812,34 +984,50 @@ def perform_retrieval_significance_tests(raw_data: dict, method_keys: list, data
             method_values[method_key] = np.array(values)
     
     if not method_values:
-        return {m: None for m in method_keys}
+        return {m: {'best': None, 'worst': None} for m in method_keys}
     
-    # Find the method with the highest mean
+    # Find the method with the highest and lowest mean
     means = {m: np.mean(v) for m, v in method_values.items()}
     best_method = max(means, key=means.get)
+    worst_method = min(means, key=means.get)
     best_values = method_values[best_method]
+    worst_values = method_values[worst_method]
     
     results = {}
     for method_key in method_keys:
         if method_key not in method_values:
-            results[method_key] = None
+            results[method_key] = {'best': None, 'worst': None}
             continue
         
+        # Test against best
         if method_key == best_method:
-            results[method_key] = 'best'
+            best_status = 'is_extreme'
         else:
-            # Perform two-sample t-test (independent samples)
             other_values = method_values[method_key]
             try:
-                # Use Welch's t-test (unequal variances)
                 _, p_value = stats.ttest_ind(best_values, other_values, equal_var=False)
                 if p_value >= SIGNIFICANCE_LEVEL:
-                    # Not significantly different from the best
-                    results[method_key] = 'not_sig_diff'
+                    best_status = 'not_sig_diff'
                 else:
-                    results[method_key] = 'worse'
+                    best_status = 'different'
             except Exception:
-                results[method_key] = 'worse'
+                best_status = 'different'
+        
+        # Test against worst
+        if method_key == worst_method:
+            worst_status = 'is_extreme'
+        else:
+            other_values = method_values[method_key]
+            try:
+                _, p_value = stats.ttest_ind(worst_values, other_values, equal_var=False)
+                if p_value >= SIGNIFICANCE_LEVEL:
+                    worst_status = 'not_sig_diff'
+                else:
+                    worst_status = 'different'
+            except Exception:
+                worst_status = 'different'
+        
+        results[method_key] = {'best': best_status, 'worst': worst_status}
     
     return results
 
@@ -900,10 +1088,13 @@ def print_retrieval_table(summary: dict, raw_data: dict = None, baseline_summary
             values = []
             for metric in RETRIEVAL_METRICS:
                 val = metrics_data.get(metric)
-                sig_status = None
+                best_status = None
+                worst_status = None
                 if raw_data is not None:
-                    sig_status = significance.get(dataset, {}).get(metric, {}).get(method_key)
-                values.append(format_value_with_significance(val, sig_status))
+                    sig_result = significance.get(dataset, {}).get(metric, {}).get(method_key, {})
+                    best_status = sig_result.get('best')
+                    worst_status = sig_result.get('worst')
+                values.append(format_value_with_significance(val, best_status, worst_status))
             metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
             row += f" | {metrics_str}"
         
@@ -928,7 +1119,7 @@ def print_retrieval_table(summary: dict, raw_data: dict = None, baseline_summary
             print(row)
     
     print("=" * len(header1))
-    print("Legend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
+    print("Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)")
 
 
 def build_retrieval_table_per_k(all_runs: dict, k_value: int):
@@ -1059,10 +1250,13 @@ def print_retrieval_table_compact(summary: dict, k_value: int, raw_data: dict = 
             values = []
             for metric in RETRIEVAL_METRICS:
                 val = metrics_data.get(metric)
-                sig_status = None
+                best_status = None
+                worst_status = None
                 if raw_data is not None:
-                    sig_status = significance.get(dataset, {}).get(metric, {}).get(method_key)
-                values.append(format_value_with_significance(val, sig_status))
+                    sig_result = significance.get(dataset, {}).get(metric, {}).get(method_key, {})
+                    best_status = sig_result.get('best')
+                    worst_status = sig_result.get('worst')
+                values.append(format_value_with_significance(val, best_status, worst_status))
             metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
             row += f" | {metrics_str}"
         
@@ -1104,7 +1298,7 @@ def print_retrieval_tables_per_k(all_runs: dict, baseline_summary: dict = None):
         summary, raw_data = build_retrieval_table_per_k(all_runs, k_value)
         print_retrieval_table_compact(summary, k_value, raw_data, baseline_summary)
     
-    print("\nLegend: **bold** = best, *italic* = not significantly different from best (p >= 0.05)")
+    print("\nLegend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)")
 
 
 def main():
@@ -1129,10 +1323,11 @@ def main():
     summary, raw_data = build_summary_table_from_runs(all_runs)
     print_summary_table(summary, raw_data)
     
-    # Build and print ablation table
+    # Build and print ablation tables (one per LLM model)
     print("\n--- Ablation Experiments Summary ---")
-    ablation_summary, ablation_raw_data = build_ablation_table(all_runs)
-    print_ablation_table(ablation_summary, ablation_raw_data)
+    for llm_model in GENERATIVE_LLM_MODELS:
+        ablation_summary, ablation_raw_data = build_ablation_table(all_runs, llm_model)
+        print_ablation_table(ablation_summary, llm_model, ablation_raw_data)
     
     # Build and print retrieval table
     print("\n--- Retrieval Evaluation Summary ---")
