@@ -13,5 +13,4 @@ module load cuda/12.6
 module load java/1.8
 
 source ~/virtualenvs/llm-topics/bin/activate
-# source scripts/run_generative_ablation_bow.sh
-source scripts/run_missing_ablations.sh
+source scripts/run_generative_ablation_bow.sh
