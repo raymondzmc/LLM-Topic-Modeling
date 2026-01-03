@@ -6,14 +6,14 @@
 # Iterates over 3 datasets x 3 base models
 
 datasets=(
-    "20_newsgroups"
-    "tweet_topic"
+    # "20_newsgroups"
+    # "tweet_topic"
     "stackoverflow"
 )
 
 models=(
-    "ERNIE-4.5-0.3B-PT"
-    "Llama-3.1-8B-Instruct"
+    # "ERNIE-4.5-0.3B-PT"
+    # "Llama-3.1-8B-Instruct"
     "Llama-3.2-1B-Instruct"
 )
 
