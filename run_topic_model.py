@@ -516,6 +516,8 @@ def run(args: argparse.Namespace):
             run_name += "_CE"
         if args.sparsity_ratio != 1.0:
             run_name += f"_sparsity{args.sparsity_ratio}"
+        if args.temperature != 3.0:
+            run_name += f"_temp{args.temperature}"
 
     wb_run = wandb.init(
         project=wandb_project,

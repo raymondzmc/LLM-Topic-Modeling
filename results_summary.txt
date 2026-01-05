@@ -10,11 +10,11 @@ Significance level: 0.05
 ============================================================
 
 Fetching runs from llm-topics/20_newsgroups...
-  Found 131 finished runs
+  Found 178 finished runs
 Fetching runs from llm-topics/tweet_topic...
-  Found 124 finished runs
+  Found 126 finished runs
 Fetching runs from llm-topics/stackoverflow...
-  Found 120 finished runs
+  Found 126 finished runs
 
 --- Main Methods Summary ---
   lda on 20_newsgroups: 4 runs
@@ -41,7 +41,7 @@ Fetching runs from llm-topics/stackoverflow...
   fastopic on 20_newsgroups: 4 runs
   fastopic on tweet_topic: 4 runs
   fastopic on stackoverflow: 4 runs
-  generative_ERNIE-4.5-0.3B-PT on 20_newsgroups: 4 runs
+  generative_ERNIE-4.5-0.3B-PT on 20_newsgroups: 51 runs
   generative_ERNIE-4.5-0.3B-PT on tweet_topic: 4 runs
   generative_ERNIE-4.5-0.3B-PT on stackoverflow: 4 runs
   generative_Llama-3.1-8B-Instruct on 20_newsgroups: 4 runs
@@ -63,14 +63,17 @@ ETM                       |   ~0.344~     2.346   ~0.934~     0.360 |     0.351 
 BERTopic                  |     0.360     2.475     0.992     0.352 |     0.364     2.194     0.996     0.562 |     0.374     2.632     0.996     0.202
 ECRTM                     |     0.360   ~2.282~ **0.999**     0.364 |     0.356   ~1.853~ **1.000**   ~0.399~ |     0.373   ~1.946~ **1.000**   ~0.062~
 FASTopic                  |     0.358     2.589 **0.999**     0.416 |   ~0.276~     1.956   ~0.626~     0.557 |     0.363     2.304   ~0.687~     0.171
-Generative (ERNIE)        | **0.381** **2.863**     0.991     0.520 | **0.392** **2.898**     0.989 **0.781** | **0.397**     2.920     0.986 **0.737**
+Generative (ERNIE)        | **0.378**     2.670     0.982     0.468 | **0.392** **2.898**     0.989 **0.781** | **0.397**     2.920     0.986 **0.737**
 Generative (Llama-8B)     |     0.364 **2.874**     0.993 **0.559** |     0.384     2.878     0.993 **0.774** |     0.386 **2.956**     0.991     0.700
 Generative (Llama-1B)     |     0.375 **2.865**     0.993 **0.559** |     0.383 **2.899**     0.993 **0.781** |     0.393     2.938     0.993     0.689
 =======================================================================================================================================================
 Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)
 
 --- Ablation Experiments Summary ---
-  ERNIE-4.5-0.3B-PT/original on 20_newsgroups: 4 runs
+  ERNIE-4.5-0.3B-PT/zeroshot on 20_newsgroups: 4 runs
+  ERNIE-4.5-0.3B-PT/zeroshot on tweet_topic: 4 runs
+  ERNIE-4.5-0.3B-PT/zeroshot on stackoverflow: 4 runs
+  ERNIE-4.5-0.3B-PT/original on 20_newsgroups: 51 runs
   ERNIE-4.5-0.3B-PT/original on tweet_topic: 4 runs
   ERNIE-4.5-0.3B-PT/original on stackoverflow: 4 runs
   ERNIE-4.5-0.3B-PT/bow_target on 20_newsgroups: 8 runs
@@ -89,12 +92,16 @@ ABLATION EXPERIMENTS (ERNIE-4.5-0.3B-PT)
 Ablation                  |              20_newsgroups              |               tweet_topic               |              stackoverflow             
                           |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity
 =======================================================================================================================================================
-Original (Ours)           |     0.381 **2.863** **0.991** **0.520** |     0.392 **2.898**     0.989 **0.781** |     0.397 **2.920**     0.986 **0.737**
-BoW Target                |   ~0.339~   ~2.480~ **0.991**   ~0.432~ |   ~0.357~   ~2.160~ **0.994**   ~0.624~ |   ~0.369~   ~2.769~ **0.993**   ~0.374~
+ZeroShotTM                |     0.354     2.531 **0.994**   ~0.397~ |   ~0.356~     2.302 **0.994**   ~0.573~ |   ~0.363~     2.841 **0.993**   ~0.307~
+Original (Ours)           |     0.378     2.670     0.982     0.468 |     0.392 **2.898**     0.989 **0.781** |     0.397 **2.920**     0.986 **0.737**
+BoW Target                |   ~0.339~   ~2.480~     0.991     0.432 |   ~0.357~   ~2.160~ **0.994**     0.624 |     0.369   ~2.769~ **0.993**     0.374
 Contextualized Embeddings |     0.381 **2.855**     0.988 **0.513** |     0.396 **2.880**     0.985     0.721 |     0.396     2.903     0.979     0.513
 NLL Loss                  | **0.407**     2.778   ~0.969~     0.468 | **0.406**     2.762   ~0.965~     0.762 | **0.419**     2.834   ~0.976~     0.716
 =======================================================================================================================================================
 Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)
+  Llama-3.1-8B-Instruct/zeroshot on 20_newsgroups: 4 runs
+  Llama-3.1-8B-Instruct/zeroshot on tweet_topic: 4 runs
+  Llama-3.1-8B-Instruct/zeroshot on stackoverflow: 4 runs
   Llama-3.1-8B-Instruct/original on 20_newsgroups: 4 runs
   Llama-3.1-8B-Instruct/original on tweet_topic: 4 runs
   Llama-3.1-8B-Instruct/original on stackoverflow: 4 runs
@@ -114,23 +121,28 @@ ABLATION EXPERIMENTS (Llama-3.1-8B-Instruct)
 Ablation                  |              20_newsgroups              |               tweet_topic               |              stackoverflow             
                           |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity
 =======================================================================================================================================================
-Original (Ours)           |     0.364 **2.874** **0.993** **0.559** |     0.384     2.878     0.993 **0.774** |     0.386 **2.956** **0.991** **0.700**
-BoW Target                |   ~0.339~   ~2.471~     0.991   ~0.452~ |   ~0.358~   ~2.142~ **0.994**   ~0.599~ |   ~0.364~   ~2.741~ **0.993**   ~0.346~
+ZeroShotTM                |     0.354     2.531 **0.994**   ~0.397~ |   ~0.356~     2.302 **0.994**   ~0.573~ |   ~0.363~     2.841 **0.993**   ~0.307~
+Original (Ours)           |     0.364 **2.874**     0.993 **0.559** |     0.384     2.878     0.993 **0.774** |     0.386 **2.956** **0.991** **0.700**
+BoW Target                |   ~0.339~   ~2.471~     0.991     0.452 |   ~0.358~   ~2.142~ **0.994**     0.599 |   ~0.364~   ~2.741~ **0.993**     0.346
 Contextualized Embeddings |     0.366 **2.859**     0.990 **0.552** |     0.382     2.855     0.989     0.715 |     0.384     2.942     0.986     0.482
 NLL Loss                  | **0.396**     2.769   ~0.973~     0.500 | **0.389** **2.910**   ~0.958~ **0.769** | **0.398**     2.918   ~0.979~ **0.701**
 =======================================================================================================================================================
 Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)
+  Llama-3.2-1B-Instruct/zeroshot on 20_newsgroups: 4 runs
+  Llama-3.2-1B-Instruct/zeroshot on tweet_topic: 4 runs
+  Llama-3.2-1B-Instruct/zeroshot on stackoverflow: 4 runs
   Llama-3.2-1B-Instruct/original on 20_newsgroups: 40 runs
   Llama-3.2-1B-Instruct/original on tweet_topic: 40 runs
   Llama-3.2-1B-Instruct/original on stackoverflow: 40 runs
   Llama-3.2-1B-Instruct/bow_target on 20_newsgroups: 4 runs
-  Llama-3.2-1B-Instruct/bow_target on tweet_topic: 2 runs
+  Llama-3.2-1B-Instruct/bow_target on tweet_topic: 4 runs
+  Llama-3.2-1B-Instruct/bow_target on stackoverflow: 4 runs
   Llama-3.2-1B-Instruct/contextualized_embeddings on 20_newsgroups: 4 runs
   Llama-3.2-1B-Instruct/contextualized_embeddings on tweet_topic: 4 runs
   Llama-3.2-1B-Instruct/contextualized_embeddings on stackoverflow: 4 runs
   Llama-3.2-1B-Instruct/nll_loss on 20_newsgroups: 4 runs
   Llama-3.2-1B-Instruct/nll_loss on tweet_topic: 2 runs
-  Llama-3.2-1B-Instruct/nll_loss on stackoverflow: 2 runs
+  Llama-3.2-1B-Instruct/nll_loss on stackoverflow: 4 runs
 
 =======================================================================================================================================================
 ABLATION EXPERIMENTS (Llama-3.2-1B-Instruct)
@@ -138,10 +150,11 @@ ABLATION EXPERIMENTS (Llama-3.2-1B-Instruct)
 Ablation                  |              20_newsgroups              |               tweet_topic               |              stackoverflow             
                           |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity
 =======================================================================================================================================================
-Original (Ours)           |     0.375     2.865 **0.993** **0.559** |     0.383 **2.899**     0.993 **0.781** |   ~0.393~ **2.938** **0.993** **0.689**
-BoW Target                |   ~0.341~   ~2.477~     0.991   ~0.443~ |   ~0.355~   ~2.228~ **0.996**   ~0.595~ |         -         -         -         -
-Contextualized Embeddings |     0.381 **2.890**     0.989     0.549 |     0.390 **2.910**     0.989     0.723 | **0.402**     2.913   ~0.985~   ~0.468~
-NLL Loss                  | **0.398**     2.748   ~0.968~     0.503 | **0.405**     2.858   ~0.963~     0.748 | **0.400**   ~2.862~   ~0.982~     0.623
+ZeroShotTM                |     0.354     2.531 **0.994**   ~0.397~ |   ~0.356~     2.302     0.994   ~0.573~ |   ~0.363~     2.841 **0.993**   ~0.307~
+Original (Ours)           |     0.375     2.865     0.993 **0.559** |     0.383 **2.899**     0.993 **0.781** |     0.393 **2.938** **0.993** **0.689**
+BoW Target                |   ~0.341~   ~2.477~     0.991     0.443 |   ~0.353~   ~2.139~ **0.995**     0.609 |   ~0.362~   ~2.761~ **0.993**     0.335
+Contextualized Embeddings |     0.381 **2.890**     0.989     0.549 |     0.390 **2.910**     0.989     0.723 | **0.402**     2.913     0.985     0.468
+NLL Loss                  | **0.398**     2.748   ~0.968~     0.503 | **0.405**     2.858   ~0.963~     0.748 | **0.399**     2.840   ~0.979~     0.649
 =======================================================================================================================================================
 Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)
 

@@ -75,8 +75,9 @@ METHOD_DISPLAY_NAMES = {
 }
 
 # Ablation experiment configuration
-ABLATION_TYPES = ["original", "bow_target", "contextualized_embeddings", "nll_loss"]
+ABLATION_TYPES = ["zeroshot", "original", "bow_target", "contextualized_embeddings", "nll_loss"]
 ABLATION_DISPLAY_NAMES = {
+    "zeroshot": "ZeroShotTM",
     "original": "Original (Ours)",
     "bow_target": "BoW Target",
     "contextualized_embeddings": "Contextualized Embeddings",
@@ -636,10 +637,15 @@ def build_ablation_table(all_runs: dict, llm_model: str):
         runs = all_runs.get(dataset, [])
         
         for run in runs:
-            # Get ablation key for this LLM model
-            ablation_key = get_ablation_key_from_run(run, llm_model)
-            if ablation_key is None:
-                continue
+            # Check if this is a ZeroShotTM run
+            model = run.config.get("model", "")
+            if model == "zeroshot":
+                ablation_key = "zeroshot"
+            else:
+                # Get ablation key for generative runs with this LLM model
+                ablation_key = get_ablation_key_from_run(run, llm_model)
+                if ablation_key is None:
+                    continue
             
             # Check if K is in our target values
             num_topics = run.config.get("num_topics")
