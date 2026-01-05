@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run Generative Topic Model with temperature ablation (Part 1)
 # Model: ERNIE-4.5-0.3B-PT
-# Temperatures: 3
+# Temperatures: 6
 
 model="ERNIE-4.5-0.3B-PT"
 
@@ -17,12 +17,12 @@ do
     
     for K in 25 50 75 100
     do
-        echo "Running Generative TM on $DATA_PATH with K=$K, temperature=3"
+        echo "Running Generative TM on $DATA_PATH with K=$K, temperature=6"
         python run_topic_model.py \
             --model generative \
             --data_path "$DATA_PATH" \
             --num_topics $K \
-            --temperature 3
+            --temperature 6
     done
 done
 
