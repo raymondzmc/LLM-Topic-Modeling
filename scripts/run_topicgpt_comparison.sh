@@ -4,7 +4,7 @@
 # Supports ERNIE-4.5-0.3B-PT, Llama-3.2-1B-Instruct, and Llama-3.1-8B-Instruct
 
 # ============================================================================
-# Step 1: Process train datasets (same as run_topicgpt_comparison.sh)
+# Step 1: Process train datasets
 # ============================================================================
 
 echo "=========================================="
@@ -129,4 +129,3 @@ echo "=========================================="
 echo "All evaluations complete!"
 echo "Results saved to: results/train_test_eval/"
 echo "=========================================="
-

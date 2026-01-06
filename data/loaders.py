@@ -71,10 +71,21 @@ def get_local_dataset(dataset_path: str) -> Dataset:
     Returns:
         Dataset loaded from the TSV file
     """
+    import pandas as pd
+    
     if not os.path.basename(dataset_path).endswith('.tsv'):
         raise ValueError(f"Dataset {dataset_path} is not a TSV file")
-    dataset = load_dataset("csv", data_files=dataset_path, delimiter='\t')
-    dataset = dataset['train']
+    
+    # Use pandas with on_bad_lines to handle rows with extra tabs in text content
+    df = pd.read_csv(
+        dataset_path, 
+        sep='\t', 
+        on_bad_lines='warn',  # Skip malformed rows and warn
+        engine='python',  # Python engine is more forgiving
+    )
+    
+    # Convert pandas DataFrame to HuggingFace Dataset
+    dataset = Dataset.from_pandas(df)
     return dataset
 
 
