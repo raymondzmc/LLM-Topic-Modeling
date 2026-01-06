@@ -24,7 +24,7 @@ do
         # Construct full dataset path/name
         DATA_PATH="raymondzmc/${dataset}_${model}_vocab_2000_last"
         
-        for K in 75 100
+        for K in 100
         do
             echo "Running Generative TM (CE loss) on $DATA_PATH with K=$K"
             python run_topic_model.py \

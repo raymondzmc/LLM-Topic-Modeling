@@ -577,7 +577,7 @@ def get_ablation_key_from_run(run, llm_model: str) -> Optional[str]:
     """Extract ablation type key from a wandb run.
     
     Only considers generative runs for the specified LLM model.
-    Returns None for runs that don't match the specified model.
+    Returns None for runs that don't match the specified model or are unrecognized ablations.
     
     Args:
         run: WandB run object
@@ -595,21 +595,28 @@ def get_ablation_key_from_run(run, llm_model: str) -> Optional[str]:
     
     run_name = run.name
     
-    # Only consider runs for the specified LLM model
-    if llm_model not in run_name:
+    # Must start with the expected prefix for this LLM model
+    expected_prefix = f"generative_{llm_model}_K"
+    if not run_name.startswith(expected_prefix):
         return None
     
+    # Extract the part after the prefix
+    suffix = run_name[len(expected_prefix):]
+    
     # Check for ablation patterns (order matters - check more specific patterns first)
-    if "_bow-target" in run_name:
+    if "_bow-target" in suffix:
         return "bow_target"
-    elif "_gte-large-en-v1.5" in run_name:
+    elif "_gte-large-en-v1.5" in suffix:
         return "contextualized_embeddings"
-    elif run_name.endswith("_CE"):
-        # Only _CE suffix, no bow-target or embedding suffix
+    elif suffix.endswith("_CE") and "_bow-target" not in suffix:
+        # Only _CE suffix, no bow-target suffix (e.g., "25_CE")
         return "nll_loss"
-    else:
-        # No ablation suffix - this is the original model
+    elif suffix.isdigit():
+        # Just the K number, no suffix - this is the original model
         return "original"
+    else:
+        # Unrecognized ablation (e.g., _sparsity, _temp) - skip
+        return None
 
 
 def build_ablation_table(all_runs: dict, llm_model: str):
@@ -846,6 +853,10 @@ def build_summary_table_from_runs(all_runs: dict):
     for dataset in DATASETS:
         runs = all_runs.get(dataset, [])
         
+        # Track seen (method_key, K) combinations to take only the latest run
+        # Runs are already sorted by created_at (newest first)
+        seen_combinations = set()
+        
         for run in runs:
             # Get method key
             method_key = get_method_key_from_run(run)
@@ -861,6 +872,12 @@ def build_summary_table_from_runs(all_runs: dict):
             num_seeds = run.config.get("num_seeds", 0)
             if num_seeds != REQUIRED_NUM_SEEDS:
                 continue
+            
+            # Deduplicate: take only the first (latest) run for each (method_key, K)
+            combination = (method_key, num_topics)
+            if combination in seen_combinations:
+                continue
+            seen_combinations.add(combination)
             
             # Extract average metrics
             metrics = extract_metrics_from_run(run)
@@ -913,6 +930,10 @@ def build_summary_table_per_k(all_runs: dict, k_value: int):
     for dataset in DATASETS:
         runs = all_runs.get(dataset, [])
         
+        # Track seen method_keys to take only the latest run (K is fixed)
+        # Runs are already sorted by created_at (newest first)
+        seen_methods = set()
+        
         for run in runs:
             # Get method key
             method_key = get_method_key_from_run(run)
@@ -928,6 +949,11 @@ def build_summary_table_per_k(all_runs: dict, k_value: int):
             num_seeds = run.config.get("num_seeds", 0)
             if num_seeds != REQUIRED_NUM_SEEDS:
                 continue
+            
+            # Deduplicate: take only the first (latest) run for each method_key
+            if method_key in seen_methods:
+                continue
+            seen_methods.add(method_key)
             
             # Extract average metrics
             metrics = extract_metrics_from_run(run)
@@ -984,6 +1010,10 @@ def build_retrieval_table_from_runs(all_runs: dict):
     for dataset in DATASETS:
         runs = all_runs.get(dataset, [])
         
+        # Track seen (method_key, K) combinations to take only the latest run
+        # Runs are already sorted by created_at (newest first)
+        seen_combinations = set()
+        
         for run in runs:
             # Get method key
             method_key = get_method_key_from_run(run)
@@ -999,6 +1029,12 @@ def build_retrieval_table_from_runs(all_runs: dict):
             num_seeds = run.config.get("num_seeds", 0)
             if num_seeds != REQUIRED_NUM_SEEDS:
                 continue
+            
+            # Deduplicate: take only the first (latest) run for each (method_key, K)
+            combination = (method_key, num_topics)
+            if combination in seen_combinations:
+                continue
+            seen_combinations.add(combination)
             
             # Extract retrieval metrics
             metrics = extract_retrieval_metrics_from_run(run)
@@ -1289,6 +1325,10 @@ def build_retrieval_table_per_k(all_runs: dict, k_value: int):
     for dataset in DATASETS:
         runs = all_runs.get(dataset, [])
         
+        # Track seen method_keys to take only the latest run (K is fixed)
+        # Runs are already sorted by created_at (newest first)
+        seen_methods = set()
+        
         for run in runs:
             # Get method key
             method_key = get_method_key_from_run(run)
@@ -1304,6 +1344,11 @@ def build_retrieval_table_per_k(all_runs: dict, k_value: int):
             num_seeds = run.config.get("num_seeds", 0)
             if num_seeds != REQUIRED_NUM_SEEDS:
                 continue
+            
+            # Deduplicate: take only the first (latest) run for each method_key
+            if method_key in seen_methods:
+                continue
+            seen_methods.add(method_key)
             
             # Extract average retrieval metrics
             metrics = extract_retrieval_metrics_from_run(run)
