@@ -6,14 +6,14 @@
 # Iterates over 3 datasets x 3 base models
 
 datasets=(
-    # "20_newsgroups"
+    "20_newsgroups"
     "tweet_topic"
     "stackoverflow"
 )
 
 models=(
-    # "ERNIE-4.5-0.3B-PT"
-    # "Llama-3.1-8B-Instruct"
+    "ERNIE-4.5-0.3B-PT"
+    "Llama-3.1-8B-Instruct"
     "Llama-3.2-1B-Instruct"
 )
 
@@ -35,8 +35,7 @@ do
                 --data_path "$DATA_PATH" \
                 --num_topics $K \
                 --ablation_use_bow_target \
-                --loss_type "CE" \
-                --temperature 1.0
+                --loss_type "CE"
         done
     done
 done

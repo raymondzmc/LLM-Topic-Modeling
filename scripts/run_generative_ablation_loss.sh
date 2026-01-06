@@ -7,8 +7,8 @@
 
 datasets=(
     # "20_newsgroups"
-    # "tweet_topic"
-    "stackoverflow"
+    "tweet_topic"
+    # "stackoverflow"
 )
 
 models=(
@@ -24,15 +24,14 @@ do
         # Construct full dataset path/name
         DATA_PATH="raymondzmc/${dataset}_${model}_vocab_2000_last"
         
-        for K in 25 50 75 100
+        for K in 75 100
         do
             echo "Running Generative TM (CE loss) on $DATA_PATH with K=$K"
             python run_topic_model.py \
                 --model generative \
                 --data_path "$DATA_PATH" \
                 --num_topics $K \
-                --loss_type "CE" \
-                --temperature 1.0
+                --loss_type "CE"
         done
     done
 done

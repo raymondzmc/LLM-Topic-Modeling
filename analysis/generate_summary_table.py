@@ -69,19 +69,20 @@ METHOD_DISPLAY_NAMES = {
     "bertopic": "BERTopic",
     "ecrtm": "ECRTM",
     "fastopic": "FASTopic",
-    "generative_ERNIE-4.5-0.3B-PT": "Generative (ERNIE)",
-    "generative_Llama-3.1-8B-Instruct": "Generative (Llama-8B)",
-    "generative_Llama-3.2-1B-Instruct": "Generative (Llama-1B)",
+    "generative_ERNIE-4.5-0.3B-PT": "ERNIE-4.5-0.3B",
+    "generative_Llama-3.1-8B-Instruct": "Llama-3.1-8B",
+    "generative_Llama-3.2-1B-Instruct": "Llama-3.2-1B",
 }
 
 # Ablation experiment configuration
-ABLATION_TYPES = ["zeroshot", "original", "bow_target", "contextualized_embeddings", "nll_loss"]
+# Order: Original first, then ablations sorted by their changes from original
+ABLATION_TYPES = ["original", "nll_loss", "bow_target", "contextualized_embeddings", "zeroshot"]
 ABLATION_DISPLAY_NAMES = {
-    "zeroshot": "ZeroShotTM",
-    "original": "Original (Ours)",
-    "bow_target": "BoW Target",
-    "contextualized_embeddings": "Contextualized Embeddings",
-    "nll_loss": "NLL Loss",
+    "original": "Original",
+    "nll_loss": "NLL",
+    "bow_target": "NLL + BoW",
+    "contextualized_embeddings": "Embeddings",
+    "zeroshot": "NLL + BoW + Embeddings",
 }
 
 
@@ -91,6 +92,9 @@ def get_method_key_from_run(run):
     For baseline methods, returns config.model.
     For generative methods, returns 'generative_{LLM_MODEL}'.
     Only includes original generative runs (excludes ablation variants).
+    
+    Original generative runs have names exactly matching: generative_{LLM_MODEL}_K{num}
+    Ablation variants have additional suffixes like _CE, _bow-target, _sparsity{x}, _temp{x}, etc.
     """
     model = run.config.get("model", "")
     
@@ -98,15 +102,15 @@ def get_method_key_from_run(run):
         # Parse run name to extract LLM model: generative_{LLM_MODEL}_K{num}
         run_name = run.name
         for llm_model in GENERATIVE_LLM_MODELS:
-            if f"generative_{llm_model}_K" in run_name:
-                # Exclude ablation variants - only include original runs
-                if "_bow-target" in run_name:
-                    return None
-                if "_gte-large-en-v1.5" in run_name:
-                    return None
-                if run_name.endswith("_CE"):
-                    return None
-                return f"generative_{llm_model}"
+            expected_prefix = f"generative_{llm_model}_K"
+            if run_name.startswith(expected_prefix):
+                # Extract the part after the prefix (should be just a number for original runs)
+                suffix = run_name[len(expected_prefix):]
+                # Original runs have only the K number, no additional suffix
+                if suffix.isdigit():
+                    return f"generative_{llm_model}"
+                # Otherwise it's an ablation variant (has suffix like _CE, _bow-target, etc.)
+                return None
         # If no match found, return None to skip this run
         return None
     elif model in BASELINE_METHODS:
@@ -420,20 +424,20 @@ def perform_ablation_significance_tests(raw_data: dict, method_keys: list, datas
 
 
 def format_value_with_significance(value, best_status, worst_status, decimals=3):
-    """Format a metric value with significance markers.
+    """Format a metric value with significance markers for main methods.
     
     Args:
         value: The metric value
         best_status: 'is_extreme' | 'not_sig_diff' | 'different' | None (status vs. best)
-        worst_status: 'is_extreme' | 'not_sig_diff' | 'different' | None (status vs. worst)
+        worst_status: Unused for main methods (kept for API compatibility)
         decimals: Number of decimal places
         
     Returns:
         Formatted string with markers:
         - **value** for best or not significantly different from best
-        - ~value~ for not significantly different from worst
-        - **~value~** for indistinguishable from both best and worst
         - value (plain) otherwise
+        
+    Note: Worst markers (~tilde~) are only used in ablation tables, not main methods.
     """
     if value is None:
         return "-"
@@ -442,22 +446,12 @@ def format_value_with_significance(value, best_status, worst_status, decimals=3)
     
     # Determine if indistinguishable from best
     best_marker = best_status == 'is_extreme' or best_status == 'not_sig_diff'
-    # Determine if indistinguishable from worst
-    worst_marker = worst_status == 'is_extreme' or worst_status == 'not_sig_diff'
     
-    # Both markers (indistinguishable from both)
-    if best_marker and worst_marker:
-        return f"**~{formatted}~**"
-    
-    # Only best marker
+    # Only best marker for main methods (no worst markers)
     if best_marker:
         return f"**{formatted}**"
     
-    # Only worst marker
-    if worst_marker:
-        return f"~{formatted}~"
-    
-    # Neither marker
+    # No marker
     return formatted
 
 
@@ -576,7 +570,7 @@ def print_summary_table(summary: dict, raw_data: dict = None):
         print(row)
     
     print("=" * len(header1))
-    print("Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)")
+    print("Legend: **bold** = best or not sig. different from best (p >= 0.05)")
 
 
 def get_ablation_key_from_run(run, llm_model: str) -> Optional[str]:
@@ -636,6 +630,10 @@ def build_ablation_table(all_runs: dict, llm_model: str):
     for dataset in DATASETS:
         runs = all_runs.get(dataset, [])
         
+        # Track seen (ablation_key, K) combinations to take only the latest run
+        # Runs are already sorted by created_at (newest first)
+        seen_combinations = set()
+        
         for run in runs:
             # Check if this is a ZeroShotTM run
             model = run.config.get("model", "")
@@ -656,6 +654,12 @@ def build_ablation_table(all_runs: dict, llm_model: str):
             num_seeds = run.config.get("num_seeds", 0)
             if num_seeds != REQUIRED_NUM_SEEDS:
                 continue
+            
+            # Deduplicate: take only the first (latest) run for each (ablation_key, K)
+            combination = (ablation_key, num_topics)
+            if combination in seen_combinations:
+                continue
+            seen_combinations.add(combination)
             
             # Extract average metrics
             metrics = extract_metrics_from_run(run)
@@ -689,8 +693,80 @@ def build_ablation_table(all_runs: dict, llm_model: str):
     return summary, raw_data
 
 
+def test_ablation_vs_original(raw_data: dict, ablation_key: str, dataset: str, metric: str) -> str:
+    """Perform t-test comparing ablation method to Original.
+    
+    Args:
+        raw_data: {ablation_type: {dataset: {metric: [values]}}}
+        ablation_key: The ablation method to compare
+        dataset: Dataset name
+        metric: Metric name
+        
+    Returns:
+        'better' if significantly better than Original
+        'worse' if significantly worse than Original
+        'same' if not significantly different
+        None if insufficient data
+    """
+    original_values = raw_data.get("original", {}).get(dataset, {}).get(metric, [])
+    ablation_values = raw_data.get(ablation_key, {}).get(dataset, {}).get(metric, [])
+    
+    if not original_values or not ablation_values:
+        return None
+    
+    try:
+        _, p_value = stats.ttest_ind(ablation_values, original_values, equal_var=False)
+        if p_value >= SIGNIFICANCE_LEVEL:
+            return 'same'
+        
+        # Significant difference - check direction
+        # For all metrics (CV, LLM, I-RBO, Purity), higher is better
+        ablation_mean = np.mean(ablation_values)
+        original_mean = np.mean(original_values)
+        
+        if ablation_mean > original_mean:
+            return 'better'
+        else:
+            return 'worse'
+    except Exception:
+        return None
+
+
+def format_ablation_diff(value, original_value, significance: str = None, decimals=3):
+    """Format an ablation value as difference from original with significance markers.
+    
+    Args:
+        value: The metric value for this ablation
+        original_value: The metric value for the original method
+        significance: 'better', 'worse', 'same', or None
+        decimals: Number of decimal places
+        
+    Returns:
+        Formatted string with sign and significance markers:
+        - **+0.024** if significantly better
+        - ~-0.015~ if significantly worse
+        - +0.024 or -0.015 if not significant
+    """
+    if value is None or original_value is None:
+        return "-"
+    
+    diff = value - original_value
+    if diff >= 0:
+        formatted = f"+{diff:.{decimals}f}"
+    else:
+        formatted = f"{diff:.{decimals}f}"
+    
+    # Add significance markers
+    if significance == 'better':
+        return f"**{formatted}**"
+    elif significance == 'worse':
+        return f"~{formatted}~"
+    else:
+        return formatted
+
+
 def print_ablation_table(summary: dict, llm_model: str, raw_data: dict = None):
-    """Print the ablation summary table in a readable format with significance markers.
+    """Print the ablation summary table showing differences from original.
     
     Args:
         summary: {ablation_type: {dataset: {metric: avg_value}}}
@@ -700,20 +776,10 @@ def print_ablation_table(summary: dict, llm_model: str, raw_data: dict = None):
     # Header
     metric_labels = ["CV", "LLM", "I-RBO", "Purity"]
     
-    # Column widths (increased for significance markers)
+    # Column widths
     method_width = 25
     metric_width = 9
     dataset_width = metric_width * len(metric_labels) + len(metric_labels) - 1
-    
-    # Compute significance for each metric and dataset
-    significance = {}
-    if raw_data is not None:
-        for dataset in DATASETS:
-            significance[dataset] = {}
-            for metric in METRICS:
-                significance[dataset][metric] = perform_ablation_significance_tests(
-                    raw_data, ABLATION_TYPES, dataset, metric
-                )
     
     # Print header row 1 (dataset names)
     header1 = f"{'Ablation':<{method_width}}"
@@ -732,30 +798,34 @@ def print_ablation_table(summary: dict, llm_model: str, raw_data: dict = None):
     print(header2)
     print("=" * len(header1))
     
-    # Print rows
+    # Print rows - Original shows raw values, others show differences with significance
     for ablation_key in ABLATION_TYPES:
         display_name = ABLATION_DISPLAY_NAMES.get(ablation_key, ablation_key)
         row = f"{display_name:<{method_width}}"
         
         for dataset in DATASETS:
             metrics_data = summary.get(ablation_key, {}).get(dataset, {})
+            original_data = summary.get("original", {}).get(dataset, {})
             values = []
             for metric in METRICS:
                 val = metrics_data.get(metric)
-                best_status = None
-                worst_status = None
-                if raw_data is not None:
-                    sig_result = significance.get(dataset, {}).get(metric, {}).get(ablation_key, {})
-                    best_status = sig_result.get('best')
-                    worst_status = sig_result.get('worst')
-                values.append(format_ablation_value_with_significance(val, best_status, worst_status))
+                if ablation_key == "original":
+                    # Original row shows raw values
+                    values.append(format_value(val))
+                else:
+                    # Other rows show difference from original with significance
+                    original_val = original_data.get(metric)
+                    significance = None
+                    if raw_data is not None:
+                        significance = test_ablation_vs_original(raw_data, ablation_key, dataset, metric)
+                    values.append(format_ablation_diff(val, original_val, significance))
             metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
             row += f" | {metrics_str}"
         
         print(row)
     
     print("=" * len(header1))
-    print("Legend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)")
+    print("Legend: **bold** = significantly better than Original, ~tilde~ = significantly worse (p < 0.05)")
 
 
 def build_summary_table_from_runs(all_runs: dict):
@@ -820,6 +890,78 @@ def build_summary_table_from_runs(all_runs: dict):
             n_runs = len(runs_data)
             if n_runs > 0:
                 print(f"  {method_key} on {dataset}: {n_runs} runs")
+    
+    return summary, raw_data
+
+
+def build_summary_table_per_k(all_runs: dict, k_value: int):
+    """Build summary table for a specific K value.
+    
+    Args:
+        all_runs: Dict mapping dataset name to list of runs
+        k_value: The specific K value to filter by
+    
+    Returns:
+        Tuple:
+            - summary: {method_key: {dataset: {metric: avg_value}}}
+            - raw_data: {method_key: {dataset: {metric: [all_seed_values]}}}
+    """
+    results = defaultdict(lambda: defaultdict(list))
+    raw_seed_data = defaultdict(lambda: defaultdict(list))
+    all_method_keys = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
+    
+    for dataset in DATASETS:
+        runs = all_runs.get(dataset, [])
+        
+        for run in runs:
+            # Get method key
+            method_key = get_method_key_from_run(run)
+            if method_key is None:
+                continue
+            
+            # Filter by K value
+            num_topics = run.config.get("num_topics")
+            if num_topics != k_value:
+                continue
+            
+            # Check if run has the required number of seeds
+            num_seeds = run.config.get("num_seeds", 0)
+            if num_seeds != REQUIRED_NUM_SEEDS:
+                continue
+            
+            # Extract average metrics
+            metrics = extract_metrics_from_run(run)
+            if metrics:
+                results[method_key][dataset].append(metrics)
+            
+            # Extract seed-level metrics for significance testing
+            seed_metrics = extract_seed_metrics_from_run(run)
+            if any(seed_metrics[m] for m in METRICS):
+                raw_seed_data[method_key][dataset].append(seed_metrics)
+    
+    # Aggregate results
+    summary = {}
+    raw_data = {}
+    for method_key in all_method_keys:
+        summary[method_key] = {}
+        raw_data[method_key] = {}
+        for dataset in DATASETS:
+            runs_data = results[method_key][dataset]
+            if runs_data:
+                aggregated = {}
+                for metric in METRICS:
+                    values = [r[metric] for r in runs_data if r.get(metric) is not None]
+                    if values:
+                        aggregated[metric] = np.mean(values)
+                    else:
+                        aggregated[metric] = None
+                summary[method_key][dataset] = aggregated
+            else:
+                summary[method_key][dataset] = {m: None for m in METRICS}
+            
+            # Aggregate seed-level data
+            seed_data_list = raw_seed_data[method_key][dataset]
+            raw_data[method_key][dataset] = aggregate_seed_metrics(seed_data_list)
     
     return summary, raw_data
 
@@ -1307,6 +1449,93 @@ def print_retrieval_tables_per_k(all_runs: dict, baseline_summary: dict = None):
     print("\nLegend: **bold** = best or not sig. different from best, ~tilde~ = not sig. different from worst (p >= 0.05)")
 
 
+def print_summary_table_compact(summary: dict, k_value: int, raw_data: dict = None):
+    """Print a compact summary table for a specific K value with significance markers.
+    
+    Args:
+        summary: {method_key: {dataset: {metric: avg_value}}}
+        k_value: The K value for this table
+        raw_data: {method_key: {dataset: {metric: [all_values]}}} for significance testing
+    """
+    # Header
+    metric_labels = ["CV", "LLM", "I-RBO", "Purity"]
+    
+    # Column widths (increased for significance markers)
+    method_width = 25
+    metric_width = 9
+    dataset_width = metric_width * len(metric_labels) + len(metric_labels) - 1
+    
+    # Order of methods in the table
+    method_order = BASELINE_METHODS + [f"generative_{llm}" for llm in GENERATIVE_LLM_MODELS]
+    
+    # Compute significance for each metric and dataset
+    significance = {}
+    if raw_data is not None:
+        for dataset in DATASETS:
+            significance[dataset] = {}
+            for metric in METRICS:
+                significance[dataset][metric] = perform_significance_tests(
+                    raw_data, method_order, dataset, metric
+                )
+    
+    # Print header
+    header1 = f"{'Method':<{method_width}}"
+    for dataset in DATASETS:
+        header1 += f" | {dataset:^{dataset_width}}"
+    print(f"\n--- K = {k_value} ---")
+    print("-" * len(header1))
+    print(header1)
+    
+    # Print header row 2 (metric names)
+    header2 = " " * method_width
+    for _ in DATASETS:
+        metrics_str = " ".join([f"{m:>{metric_width}}" for m in metric_labels])
+        header2 += f" | {metrics_str}"
+    print(header2)
+    print("-" * len(header1))
+    
+    # Print rows with significance markers
+    for method_key in method_order:
+        display_name = METHOD_DISPLAY_NAMES.get(method_key, method_key)
+        row = f"{display_name:<{method_width}}"
+        
+        for dataset in DATASETS:
+            metrics_data = summary.get(method_key, {}).get(dataset, {})
+            values = []
+            for metric in METRICS:
+                val = metrics_data.get(metric)
+                best_status = None
+                worst_status = None
+                if raw_data is not None:
+                    sig_result = significance.get(dataset, {}).get(metric, {}).get(method_key, {})
+                    best_status = sig_result.get('best')
+                    worst_status = sig_result.get('worst')
+                values.append(format_value_with_significance(val, best_status, worst_status))
+            metrics_str = " ".join([f"{v:>{metric_width}}" for v in values])
+            row += f" | {metrics_str}"
+        
+        print(row)
+    
+    print("-" * len(header1))
+
+
+def print_summary_tables_per_k(all_runs: dict):
+    """Print summary tables for each K value with significance testing.
+    
+    Args:
+        all_runs: Dict mapping dataset name to list of runs
+    """
+    print("\n" + "=" * 120)
+    print("MAIN METHODS BY K (with significance testing)")
+    print("=" * 120)
+    
+    for k_value in K_VALUES:
+        summary, raw_data = build_summary_table_per_k(all_runs, k_value)
+        print_summary_table_compact(summary, k_value, raw_data)
+    
+    print("\nLegend: **bold** = best or not sig. different from best (p >= 0.05)")
+
+
 def main():
     print("=" * 60)
     print("WandB Summary Table Generator")
@@ -1328,6 +1557,9 @@ def main():
     print("\n--- Main Methods Summary ---")
     summary, raw_data = build_summary_table_from_runs(all_runs)
     print_summary_table(summary, raw_data)
+    
+    # Print per-K summary tables
+    print_summary_tables_per_k(all_runs)
     
     # Build and print ablation tables (one per LLM model)
     print("\n--- Ablation Experiments Summary ---")
