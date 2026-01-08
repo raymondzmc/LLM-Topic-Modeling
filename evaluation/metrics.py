@@ -1,9 +1,10 @@
 import os
 import json
+import time
 import itertools
 import numpy as np
 from typing import Optional
-from openai import OpenAI
+from openai import OpenAI, RateLimitError, APIError
 from collections import defaultdict
 from settings import settings
 from llm import jinja_template_manager
@@ -39,8 +40,10 @@ def compute_llm_rating(topics: list[list[str]], model: str = "gpt-4o"):
         rating: Optional[int] = None
         temperature: float = 0.0
         num_attempts: int = 0
+        max_attempts: int = 10
+        base_delay: float = 1.0
         
-        while rating is None and num_attempts < 5:
+        while rating is None and num_attempts < max_attempts:
             try:
                 response = client.chat.completions.create(
                     model=model,
@@ -55,18 +58,35 @@ def compute_llm_rating(topics: list[list[str]], model: str = "gpt-4o"):
                 else:
                     temperature += 0.1
                     num_attempts += 1
+            except RateLimitError as e:
+                # Exponential backoff for rate limits
+                delay = base_delay * (2 ** num_attempts)
+                print(f"Rate limit hit for topic, waiting {delay:.1f}s before retry...")
+                time.sleep(delay)
+                num_attempts += 1
+            except APIError as e:
+                # API errors - retry with backoff
+                delay = base_delay * (2 ** num_attempts)
+                print(f"API error for topic \"{topic[:3]}...\": {e}. Retrying in {delay:.1f}s...")
+                time.sleep(delay)
+                num_attempts += 1
+            except ValueError as e:
+                # Invalid response format
+                print(f"Invalid response for topic \"{topic[:3]}...\": {e}")
+                temperature += 0.1
+                num_attempts += 1
             except Exception as e:
-                print(f"Error for topic \"{topic}\": {e}")
+                print(f"Error for topic \"{topic[:3]}...\": {e}")
                 temperature += 0.1
                 num_attempts += 1
                 
         if rating is None:
-            raise ValueError(f"Could not get a valid LLM rating for topic \"{topic}\" after 5 attempts.")
+            raise RuntimeError(f"Could not get LLM rating for topic {topic[:3]}... after {max_attempts} attempts.")
             
         return rating
 
-    # Use ThreadPoolExecutor for parallel execution
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    # Use ThreadPoolExecutor with reduced parallelism to avoid rate limits
+    with ThreadPoolExecutor(max_workers=5) as executor:
         # Submit all tasks
         future_to_topic = {executor.submit(get_single_topic_rating, topic): i for i, topic in enumerate(topics)}
         
@@ -74,13 +94,8 @@ def compute_llm_rating(topics: list[list[str]], model: str = "gpt-4o"):
         topic_ratings = [None] * len(topics)
         for future in as_completed(future_to_topic):
             index = future_to_topic[future]
-            try:
-                rating = future.result()
-                topic_ratings[index] = rating
-            except Exception as exc:
-                print(f'Topic at index {index} generated an exception: {exc}')
-                # Re-raise to match original behavior or handle gracefully
-                raise exc
+            rating = future.result()
+            topic_ratings[index] = rating
 
     return topic_ratings
 
@@ -247,7 +262,7 @@ def evaluate_topic_model(model_output, top_words=10, test_corpus=None, embedding
     # Wikipedia-based C_V using Palmetto
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     palmetto_jar = os.path.join(project_root, "data/wikipedia/palmetto-0.1.0-jar-with-dependencies.jar")
-    wikipedia_index = os.path.join(project_root, "data/wikipedia/wikipedia_bd")
+    wikipedia_index = os.path.join(project_root, "data/wkipedia/wikipedia_bd")
     
     jar_exists = os.path.exists(palmetto_jar)
     index_exists = os.path.exists(wikipedia_index)
