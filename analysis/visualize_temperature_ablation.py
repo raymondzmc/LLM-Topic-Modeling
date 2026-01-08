@@ -22,7 +22,7 @@ from collections import defaultdict
 from settings import settings
 
 # Configuration
-DATASET = "20_newsgroups"
+DATASETS = ["20_newsgroups", "tweet_topic", "stackoverflow"]
 LLM_MODEL = "ERNIE-4.5-0.3B-PT"
 K_VALUES = [25, 50, 75, 100]
 REQUIRED_NUM_SEEDS = 5
@@ -46,10 +46,10 @@ METRIC_COLORS = {
 }
 
 
-def fetch_runs() -> list:
+def fetch_runs(dataset: str) -> list:
     """Fetch all finished runs for the dataset from wandb."""
     api = wandb.Api()
-    project_path = f"{settings.wandb_entity}/{DATASET}"
+    project_path = f"{settings.wandb_entity}/{dataset}"
     
     print(f"Fetching runs from {project_path}...")
     
@@ -307,32 +307,41 @@ def main():
     print("=" * 60)
     print("Temperature Ablation Visualization")
     print("=" * 60)
-    print(f"Dataset: {DATASET}")
+    print(f"Datasets: {DATASETS}")
     print(f"LLM Model: {LLM_MODEL}")
     print(f"K values: {K_VALUES}")
     print(f"Default temperature: {DEFAULT_TEMPERATURE}")
     print("=" * 60 + "\n")
     
-    # Fetch runs
-    runs = fetch_runs()
-    if not runs:
-        print("No runs found!")
-        return
-    
-    # Build temperature data
-    print("\nProcessing runs by temperature...")
-    temp_metrics = build_temperature_data(runs)
-    
-    if not temp_metrics:
-        print("No temperature ablation data found!")
-        return
-    
-    # Print data table
-    print_data_table(temp_metrics)
-    
-    # Plot
-    output_path = os.path.join(os.path.dirname(__file__), "figures", "temperature_ablation.png")
-    plot_temperature_ablation(temp_metrics, output_path)
+    for dataset in DATASETS:
+        print("\n" + "-" * 60)
+        print(f"Processing: {dataset}")
+        print("-" * 60)
+        
+        # Fetch runs
+        runs = fetch_runs(dataset)
+        if not runs:
+            print(f"No runs found for {dataset}!")
+            continue
+        
+        # Build temperature data
+        print("\nProcessing runs by temperature...")
+        temp_metrics = build_temperature_data(runs)
+        
+        if not temp_metrics:
+            print(f"No temperature ablation data found for {dataset}!")
+            continue
+        
+        # Print data table
+        print_data_table(temp_metrics)
+        
+        # Plot
+        output_path = os.path.join(
+            os.path.dirname(__file__), 
+            "figures", 
+            f"temperature_ablation_{dataset}.png"
+        )
+        plot_temperature_ablation(temp_metrics, output_path)
     
     print("\nDone!")
 

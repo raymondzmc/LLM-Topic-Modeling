@@ -12,7 +12,7 @@ Significance level: 0.05
 Fetching runs from llm-topics/20_newsgroups...
   Found 166 finished runs
 Fetching runs from llm-topics/tweet_topic...
-  Found 153 finished runs
+  Found 155 finished runs
 Fetching runs from llm-topics/stackoverflow...
   Found 138 finished runs
 
@@ -210,7 +210,7 @@ Legend: **bold** = significantly better than Original, ~tilde~ = significantly w
   Llama-3.2-1B-Instruct/original on tweet_topic: 4 runs
   Llama-3.2-1B-Instruct/original on stackoverflow: 4 runs
   Llama-3.2-1B-Instruct/nll_loss on 20_newsgroups: 4 runs
-  Llama-3.2-1B-Instruct/nll_loss on tweet_topic: 2 runs
+  Llama-3.2-1B-Instruct/nll_loss on tweet_topic: 4 runs
   Llama-3.2-1B-Instruct/nll_loss on stackoverflow: 4 runs
   Llama-3.2-1B-Instruct/bow_target on 20_newsgroups: 4 runs
   Llama-3.2-1B-Instruct/bow_target on tweet_topic: 4 runs
@@ -229,7 +229,7 @@ Ablation                  |              20_newsgroups              |           
                           |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity |        CV       LLM     I-RBO    Purity
 =======================================================================================================================================================
 Original                  |     0.377     2.894     0.991     0.564 |     0.387     2.923     0.992     0.784 |     0.395     2.948     0.991     0.698
-NLL                       | **+0.021**  ~-0.146~  ~-0.023~  ~-0.061~ | **+0.019**  ~-0.065~  ~-0.029~  ~-0.035~ | **+0.004**  ~-0.107~  ~-0.012~  ~-0.049~
+NLL                       | **+0.021**  ~-0.146~  ~-0.023~  ~-0.061~ | **+0.010**  ~-0.058~  ~-0.018~  ~-0.018~ | **+0.004**  ~-0.107~  ~-0.012~  ~-0.049~
 NLL + BoW                 |  ~-0.036~  ~-0.417~    +0.000  ~-0.121~ |  ~-0.033~  ~-0.784~ **+0.004**  ~-0.175~ |  ~-0.032~  ~-0.186~ **+0.002**  ~-0.363~
 Embeddings                |    +0.005    -0.004  ~-0.002~  ~-0.016~ | **+0.003**    -0.012  ~-0.003~  ~-0.061~ | **+0.008**  ~-0.035~  ~-0.006~  ~-0.230~
 NLL + BoW + Embeddings    |  ~-0.023~  ~-0.363~ **+0.003**  ~-0.167~ |  ~-0.030~  ~-0.620~ **+0.002**  ~-0.211~ |  ~-0.032~  ~-0.106~    +0.002  ~-0.391~

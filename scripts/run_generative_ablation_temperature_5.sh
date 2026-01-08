@@ -6,7 +6,7 @@
 model="ERNIE-4.5-0.3B-PT"
 
 datasets=(
-    "20_newsgroups"
+    # "20_newsgroups"
     "tweet_topic"
     "stackoverflow"
 )
