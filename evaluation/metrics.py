@@ -262,7 +262,7 @@ def evaluate_topic_model(model_output, top_words=10, test_corpus=None, embedding
     # Wikipedia-based C_V using Palmetto
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     palmetto_jar = os.path.join(project_root, "data/wikipedia/palmetto-0.1.0-jar-with-dependencies.jar")
-    wikipedia_index = os.path.join(project_root, "data/wkipedia/wikipedia_bd")
+    wikipedia_index = os.path.join(project_root, "data/wikipedia/wikipedia_bd")
     
     jar_exists = os.path.exists(palmetto_jar)
     index_exists = os.path.exists(wikipedia_index)

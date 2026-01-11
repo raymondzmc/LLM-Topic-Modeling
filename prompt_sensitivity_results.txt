@@ -1,0 +1,211 @@
+======================================================================
+Two-Way ANOVA: Prompt Sensitivity Analysis
+======================================================================
+WandB Project: prompt_sensitivity
+LLM Model: ERNIE-4.5-0.3B-PT
+Prompt Variants: 5
+Seeds: 5
+Metrics: ['cv_wiki', 'llm_rating', 'inverted_rbo', 'purity']
+======================================================================
+Fetching runs from llm-topics/prompt_sensitivity...
+  Found 20 finished runs
+
+Building data matrix...
+
+  Processing generative runs...
+    Found 5 variants: ['variant_1', 'variant_2', 'variant_3', 'variant_4', 'variant_5']
+    variant_1: 5 seeds
+    variant_2: 5 seeds
+    variant_3: 5 seeds
+    variant_4: 5 seeds
+    variant_5: 5 seeds
+
+  Processing zeroshot runs...
+    Found 5 variants: ['variant_1', 'variant_2', 'variant_3', 'variant_4', 'variant_5']
+    variant_1: 5 seeds
+    variant_2: 5 seeds
+    variant_3: 5 seeds
+    variant_4: 5 seeds
+    variant_5: 5 seeds
+
+  Processing prodlda runs...
+    Found 5 variants: ['variant_1', 'variant_2', 'variant_3', 'variant_4', 'variant_5']
+    variant_1: 5 seeds
+    variant_2: 5 seeds
+    variant_3: 5 seeds
+    variant_4: 5 seeds
+    variant_5: 5 seeds
+
+  Processing fastopic runs...
+    Found 5 variants: ['variant_1', 'variant_2', 'variant_3', 'variant_4', 'variant_5']
+    variant_1: 5 seeds
+    variant_2: 5 seeds
+    variant_3: 5 seeds
+    variant_4: 5 seeds
+    variant_5: 5 seeds
+  Total observations: 100
+  Models: ['generative', 'zeroshot', 'prodlda', 'fastopic']
+  Prompts: ['variant_1', 'variant_2', 'variant_3', 'variant_4', 'variant_5']
+  Seeds: [0, 1, 2, 3, 4]
+
+
+######################################################################
+# MODEL: GENERATIVE
+######################################################################
+
+Data: 5 prompts × 5 seeds = 25 observations
+
+Descriptive Statistics for C_V (Wiki):
+--------------------------------------------------
+               Mean       Std  N
+prompt                          
+variant_1  0.382036  0.002466  5
+variant_2  0.382787  0.002751  5
+variant_3  0.384793  0.003034  5
+variant_4  0.385874  0.003278  5
+variant_5  0.384184  0.005047  5
+
+Overall: Mean = 0.3839, Std = 0.0034
+
+======================================================================
+TWO-WAY ANOVA: C_V (Wiki)
+======================================================================
+N = 25 observations
+Model: additive (interaction used as error term)
+
+ANOVA Table:
+----------------------------------------------------------------------
+             sum_sq    df         F    PR(>F)
+C(prompt)  0.000047   4.0  1.002570  0.434967
+C(seed)    0.000047   4.0  0.996259  0.438019
+Residual   0.000189  16.0       NaN       NaN
+
+Summary of Effects:
+----------------------------------------------------------------------
+  Prompt (main effect):      F =    1.003, p = 0.4350
+                             η²p = 0.2004 (large)
+  Seed (main effect):        F =    0.996, p = 0.4380
+                             η²p = 0.1994 (large)
+  Prompt × Seed (interaction): Not estimated (no replication; used as error term)
+
+Significance: * p < 0.05, ** p < 0.01, *** p < 0.001
+
+Descriptive Statistics for LLM Rating:
+--------------------------------------------------
+            Mean       Std  N
+prompt                       
+variant_1  2.876  0.032863  5
+variant_2  2.856  0.026077  5
+variant_3  2.872  0.041473  5
+variant_4  2.900  0.046904  5
+variant_5  2.876  0.043359  5
+
+Overall: Mean = 2.8760, Std = 0.0383
+
+======================================================================
+TWO-WAY ANOVA: LLM Rating
+======================================================================
+N = 25 observations
+Model: additive (interaction used as error term)
+
+ANOVA Table:
+----------------------------------------------------------------------
+            sum_sq    df         F    PR(>F)
+C(prompt)  0.00496   4.0  0.716763  0.592701
+C(seed)    0.00256   4.0  0.369942  0.826555
+Residual   0.02768  16.0       NaN       NaN
+
+Summary of Effects:
+----------------------------------------------------------------------
+  Prompt (main effect):      F =    0.717, p = 0.5927
+                             η²p = 0.1520 (large)
+  Seed (main effect):        F =    0.370, p = 0.8266
+                             η²p = 0.0847 (medium)
+  Prompt × Seed (interaction): Not estimated (no replication; used as error term)
+
+Significance: * p < 0.05, ** p < 0.01, *** p < 0.001
+
+Descriptive Statistics for I-RBO (Diversity):
+--------------------------------------------------
+               Mean       Std  N
+prompt                          
+variant_1  0.987478  0.000832  5
+variant_2  0.988292  0.000430  5
+variant_3  0.986107  0.000406  5
+variant_4  0.988194  0.000621  5
+variant_5  0.989824  0.000623  5
+
+Overall: Mean = 0.9880, Std = 0.0014
+
+======================================================================
+TWO-WAY ANOVA: I-RBO (Diversity)
+======================================================================
+N = 25 observations
+Model: additive (interaction used as error term)
+
+ANOVA Table:
+----------------------------------------------------------------------
+             sum_sq    df          F        PR(>F)
+C(prompt)  0.000037   4.0  42.384311  2.541663e-08
+C(seed)    0.000004   4.0   4.425248  1.342702e-02
+Residual   0.000003  16.0        NaN           NaN
+
+Summary of Effects:
+----------------------------------------------------------------------
+  Prompt (main effect):      F =   42.384, p = 0.0000***
+                             η²p = 0.9138 (large)
+  Seed (main effect):        F =    4.425, p = 0.0134*
+                             η²p = 0.5252 (large)
+  Prompt × Seed (interaction): Not estimated (no replication; used as error term)
+
+Significance: * p < 0.05, ** p < 0.01, *** p < 0.001
+
+Descriptive Statistics for Purity:
+--------------------------------------------------
+               Mean       Std  N
+prompt                          
+variant_1  0.498260  0.006801  5
+variant_2  0.494726  0.005081  5
+variant_3  0.493526  0.005633  5
+variant_4  0.483933  0.007177  5
+variant_5  0.504722  0.004734  5
+
+Overall: Mean = 0.4950, Std = 0.0088
+
+======================================================================
+TWO-WAY ANOVA: Purity
+======================================================================
+N = 25 observations
+Model: additive (interaction used as error term)
+
+ANOVA Table:
+----------------------------------------------------------------------
+             sum_sq    df         F    PR(>F)
+C(prompt)  0.001149   4.0  9.786778  0.000335
+C(seed)    0.000241   4.0  2.053074  0.135035
+Residual   0.000470  16.0       NaN       NaN
+
+Summary of Effects:
+----------------------------------------------------------------------
+  Prompt (main effect):      F =    9.787, p = 0.0003***
+                             η²p = 0.7099 (large)
+  Seed (main effect):        F =    2.053, p = 0.1350
+                             η²p = 0.3392 (large)
+  Prompt × Seed (interaction): Not estimated (no replication; used as error term)
+
+Significance: * p < 0.05, ** p < 0.01, *** p < 0.001
+
+==========================================================================================
+SUMMARY TABLE: Two-Way ANOVA Results (Prompt × Seed)
+==========================================================================================
+Metric               | Prompt Effect             | Seed Effect              
+                     |        F        p    η²p |        F        p    η²p
+------------------------------------------------------------------------------------------
+C_V (Wiki)           |     1.00  0.4350    0.200 |     1.00  0.4380    0.199
+LLM Rating           |     0.72  0.5927    0.152 |     0.37  0.8266    0.085
+I-RBO (Diversity)    |    42.38  0.0000*** 0.914 |     4.43  0.0134*   0.525
+Purity               |     9.79  0.0003*** 0.710 |     2.05  0.1350    0.339
+------------------------------------------------------------------------------------------
+Significance: * p < 0.05, ** p < 0.01, *** p < 0.001
+η²p = partial eta-squared (effect size)
+Note: Interaction not estimated (no replication); used as error term for F-tests

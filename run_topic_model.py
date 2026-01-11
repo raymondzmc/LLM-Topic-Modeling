@@ -312,11 +312,11 @@ def run_reevaluate(args: argparse.Namespace):
         
         print(f"\nMetadata: model={model_name}, dataset={dataset_name}, K={num_topics}, seeds={num_seeds}")
         
-        # Initialize new run
+        # Initialize new run with same name as source (to replace in visualization)
         new_run = wandb.init(
             project=wandb_project,
             entity=settings.wandb_entity,
-            name=f"{model_name}_K{num_topics}_reevaluate",
+            name=source_run.name,
             config={
                 "source_run_id": source_run.id,
                 "source_run_name": source_run.name,
