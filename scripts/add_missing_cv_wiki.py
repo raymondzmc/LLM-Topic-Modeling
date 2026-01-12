@@ -130,7 +130,7 @@ def compute_aggregate_results(results_dir: str) -> dict:
     return dict(aggregated_results)
 
 
-def add_cv_wiki_to_run(run_id: str, project: str, dry_run: bool = False, top_words: int = 10, use_dummy: bool = False):
+def add_cv_wiki_to_run(run_id: str, project: str, dry_run: bool = False, top_words: int = 10, use_dummy: bool = False, force: bool = False):
     """Add cv_wiki metric to a single wandb run."""
     api = wandb.Api()
     
@@ -140,9 +140,11 @@ def add_cv_wiki_to_run(run_id: str, project: str, dry_run: bool = False, top_wor
     
     # Check if already has cv_wiki
     existing_cv_wiki = source_run.summary.get("avg/cv_wiki")
-    if existing_cv_wiki is not None:
-        print(f"  Already has cv_wiki: {existing_cv_wiki:.4f}, skipping")
+    if existing_cv_wiki is not None and not force:
+        print(f"  Already has cv_wiki: {existing_cv_wiki:.4f}, skipping (use --force to re-compute)")
         return
+    elif existing_cv_wiki is not None and force:
+        print(f"  Existing cv_wiki: {existing_cv_wiki:.4f}, re-computing (--force)")
     
     # Get model artifact
     artifacts = list(source_run.logged_artifacts())
@@ -323,12 +325,13 @@ def main():
     parser.add_argument('--top_words', type=int, default=10, help='Top words for coherence')
     parser.add_argument('--all', action='store_true', help='Process all missing runs')
     parser.add_argument('--dummy', action='store_true', help='Use dummy cv_wiki value (for testing)')
+    parser.add_argument('--force', action='store_true', help='Re-compute cv_wiki even if it already exists')
     args = parser.parse_args()
     
     if args.run_id:
         if not args.project:
             parser.error("--project is required when using --run_id")
-        add_cv_wiki_to_run(args.run_id, args.project, dry_run=args.dry_run, top_words=args.top_words, use_dummy=args.dummy)
+        add_cv_wiki_to_run(args.run_id, args.project, dry_run=args.dry_run, top_words=args.top_words, use_dummy=args.dummy, force=args.force)
     elif args.all:
         print("=" * 60)
         print("Adding cv_wiki to all missing runs")
@@ -341,7 +344,7 @@ def main():
             
             for run_id in run_ids:
                 try:
-                    add_cv_wiki_to_run(run_id, project, dry_run=args.dry_run, top_words=args.top_words, use_dummy=args.dummy)
+                    add_cv_wiki_to_run(run_id, project, dry_run=args.dry_run, top_words=args.top_words, use_dummy=args.dummy, force=args.force)
                 except Exception as e:
                     print(f"  ERROR: {e}")
                     continue
