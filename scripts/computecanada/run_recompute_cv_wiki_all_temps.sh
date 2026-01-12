@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --account=def-carenini
-#SBATCH --time=12:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --output=logs/run_recompute_cv_wiki_all_temps.out
