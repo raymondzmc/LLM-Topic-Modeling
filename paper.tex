@@ -1,0 +1,2685 @@
+%%%%%%%% ICML 2026 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
+
+\documentclass{article}
+
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs} % for professional tables
+
+\usepackage{xurl}
+
+% hyperref makes hyperlinks in the resulting PDF.
+% If your build breaks (sometimes temporarily if a hyperlink spans a page)
+% please comment out the following usepackage line and replace
+% \usepackage{icml2026} with \usepackage[nohyperref]{icml2026} above.
+\usepackage{hyperref}
+
+
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% Use the following line for the initial blind version submitted for review:
+% \usepackage{icml2026}
+
+% For preprint, use
+% \usepackage[preprint]{icml2026}
+
+% If accepted, instead use the following line for the camera-ready submission:
+\usepackage[accepted]{icml2026}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{adjustbox}
+% \usepackage{algpseudocode}
+\usepackage{amsfonts}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{tabularx}
+\usepackage{subcaption}
+\usepackage[table]{xcolor}
+\usepackage{arydshln} % dashed line in table
+\usepackage{enumitem} % space control in itemize
+\usepackage{makecell}
+\usepackage{threeparttable}
+
+
+\definecolor{lightblue}{RGB}{173,216,230}
+\definecolor{lightgray}{RGB}{227,227,227}
+\definecolor{lightgreen}{RGB}{210,248,210}
+\definecolor{lightred}{RGB}{248,210,210}
+\definecolor{moregreen}{RGB}{139,212,165}
+\definecolor{bestblue}{HTML}{DCEEFF}
+\definecolor{sectiongray}{HTML}{F3F4F6}
+\newcommand{\best}[1]{\cellcolor{bestblue}\textbf{#1}}
+\newcommand{\metric}[1]{\makecell[c]{\scriptsize #1}}
+\newcommand{\model}[1]{\texttt{#1}}
+\newcommand{\dataset}[1]{\multicolumn{4}{c}{\scriptsize\textbf{#1}}}
+\newcommand{\sectionrow}[1]{%
+  \addlinespace[0.35em]
+  \rowcolor{sectiongray}
+  \multicolumn{13}{c}{\scriptsize\textbf{#1}}\\
+  \addlinespace[0.15em]
+}
+\newcommand{\retrsectionrow}[1]{%
+  \rowcolor{gray!10}%
+  \multicolumn{7}{c}{\textbf{#1}}\\%
+}
+
+\newlength{\NumCellW}
+\newlength{\BestCellW}
+
+\newcommand{\numcell}[1]{\makebox[\NumCellW][c]{#1}}
+
+\newsavebox{\dslbestbox}
+\providecommand{\best}[1]{#1}
+\renewcommand{\best}[1]{%
+  \begingroup
+  \setlength{\fboxsep}{1.1pt}%
+  \sbox{\dslbestbox}{\textbf{#1}}%
+  \makebox[\wd\dslbestbox][c]{%
+    \rlap{\smash{\kern-\fboxsep\colorbox{bestblue}{\phantom{\usebox{\dslbestbox}}}}}%
+    \usebox{\dslbestbox}%
+  }%
+  \endgroup
+}
+
+
+
+
+% if you use cleveref..
+\usepackage[capitalize,noabbrev]{cleveref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% THEOREMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% Todonotes is useful during development; simply uncomment the next line
+%    and comment out the line below the next line to turn off comments
+%\usepackage[disable,textsize=tiny]{todonotes}
+\usepackage[textsize=tiny]{todonotes}
+
+% The \icmltitle you define below is probably too long as a header.
+% Therefore, a short form for the running title is supplied here:
+\icmltitlerunning{DSL-Topic: Improving Topic Modeling by Distilling Soft Labels from Language Models}
+
+\begin{document}
+
+\twocolumn[
+  \icmltitle{DSL-Topic: Improving Topic Modeling by Distilling Soft Labels \\
+  from Language Models}
+
+  % It is OKAY to include author information, even for blind submissions: the
+  % style file will automatically remove it for you unless you've provided
+  % the [accepted] option to the icml2026 package.
+
+  % List of affiliations: The first argument should be a (short) identifier you
+  % will use later to specify author affiliations Academic affiliations
+  % should list Department, University, City, Region, Country Industry
+  % affiliations should list Company, City, Region, Country
+
+  % You can specify symbols, otherwise they are numbered in order. Ideally, you
+  % should not use this facility. Affiliations will be numbered in order of
+  % appearance and this is the preferred way.
+
+  \begin{icmlauthorlist}
+    \icmlauthor{Raymond Li}{ubc}
+    \icmlauthor{Amirhossein Abaskohi}{ubc}
+    \icmlauthor{Chuyuan Li}{ubc}
+    \icmlauthor{Gabriel Murray}{ubc}
+    \icmlauthor{Giuseppe Carenini}{ubc}
+  \end{icmlauthorlist}
+
+  \icmlaffiliation{ubc}{University of British Columbia, Vancouver, Canada}
+  \icmlcorrespondingauthor{Raymond Li}{raymondl@cs.ubc.ca}
+
+  % You may provide any keywords that you find helpful for describing your
+  % paper; these are used to populate the "keywords" metadata in the PDF but
+  % will not be shown in the document
+  \icmlkeywords{Topic Modeling, Implicit Bayesian Inference}
+  \vskip 0.3in
+]
+
+% this must go after the closing bracket ] following \twocolumn[ ...
+
+% This command actually creates the footnote in the first column listing the
+% affiliations and the copyright notice. The command takes one argument, which
+% is text to display at the start of the footnote. The \icmlEqualContribution
+% command is standard text for equal contribution. Remove it (just {}) if you
+% do not need this facility.
+
+% Use ONE of the following lines. DO NOT remove the command.
+% If you have no special notice, KEEP empty braces:
+\printAffiliationsAndNotice{}  % no special notice (required even if empty)
+% Or, if applicable, use the standard equal contribution text:
+% \printAffiliationsAndNotice{\icmlEqualContribution}
+
+\begin{abstract}
+  Traditional neural topic models are typically optimized by reconstructing the document's Bag-of-Words (BoW) representations, overlooking contextual information and struggling with data sparsity. In this work, we introduce a novel topic model training framework by \textbf{D}istilling \textbf{S}oft \textbf{L}abels (DSL) from Language Models (LMs). To construct the contextually enriched reconstruction signals, we project the next token probabilities, conditioned on a specialized prompt, onto a pre-defined vocabulary, and train the topic models to reconstruct the soft labels using the LM hidden states. This produces higher-quality topics that are more closely aligned with the underlying thematic structure of the corpus. Extensive experiments demonstrate that DSL achieves substantial improvements in topic coherence and assignment accuracy over existing baselines. Additionally, we also introduce a retrieval-based metric, which shows that our approach significantly outperforms existing methods in identifying semantically similar documents, highlighting its effectiveness for retrieval-oriented applications.
+\end{abstract}
+
+
+
+\section{Introduction}
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\linewidth]{figures/bow_vs_dsl_target_comparison.pdf}
+    \caption{
+    Comparison of BoW target (left) versus DSL target (right) for a document in the 20Newsgroups dataset. BoW can only assign mass to words that appear in the document (\textit{\textbf{\underline{highlighted}}}), while DSL target captures the underlying themes of religious debate even when the words don't appear in the document. 
+    }
+    \label{fig:target-comparison}
+\end{figure}
+
+
+Topic modeling is used for uncovering the latent thematic structures in large text corpora. Under the probabilistic topic modeling paradigm \citep{blei2003latent}, documents are modeled as mixtures of topics, and each topic can be represented by the most probable words to provide a human-interpretable summary. %of the corpus. 
+The document-level topic compositions are useful for a wide array of applications including information retrieval \citep{bai2018neural, li2021topic}, 
+% content recommendation \citep{esmaeili2019structured, xie2021graph}, 
+summarization \citep{nguyen-etal-2021-enriching, zhang2022htkg}, and exploratory data analysis \citep{zeng-etal-2019-say, li2020global}.
+
+Most existing neural topic models \citep{miao2017discovering, srivastava2017autoencoding, bianchi-etal-2021-pre, dieng-etal-2020-topic} infer latent topics by reconstructing the document's \textbf{Bag-of-Words (BoW)} representation, which captures statistical word co-occurrences, but disregards 
+% critical signals such as lexical relations, compositional meaning, and more importantly,
+compositional meaning and the rich contextual information crucial for deep semantic understanding of the underlying corpus. This limitation is especially pronounced for short-texts, where the sparse co-occurrence signals hinder the model's ability to learn coherent, high-quality topics \citep{qiang2020short}.
+
+
+% where the sparse co-occurrence data inherent in BoW further exacerbates data sparsity, limiting statistical signals and restricting the model's ability to produce coherent, high-quality topics \citep{qiang2020short}.
+% \textcolor{blue}{TODO: teaser figure explanation}
+
+
+
+% On the other hand, despite the advancements of Large Language Models (LLMs)~\citep{brown2020language, touvron2023llama, touvron2023llama2, grattafiori2024llama}, they still struggle to process large corpora due to limited context length and difficulties in modeling long-range dependencies. As a result, existing work on incorporating LLMs into topic modeling has often focused on evaluating topic quality~\citep{stammbach-etal-2023-revisiting, rahimi-etal-2024-contextualized} or augmenting source documents to mitigate data sparsity~\citep{akash-chang-2024-enhancing}. 
+On the other hand, despite advances in Large Language Models (LLMs)~\citep{brown2020language, touvron2023llama, touvron2023llama2, grattafiori2024llama}, they still struggle to effectively model large corpora due to context-length limitations and long-range dependency challenges.
+Consequently, prior work has primarily used LLMs to evaluate topic quality~\citep{stammbach-etal-2023-revisiting, rahimi-etal-2024-contextualized} or augment documents to alleviate data sparsity~\citep{akash-chang-2024-enhancing}.
+Studies that use LLMs for topic modeling typically require \textbf{complex and costly pipelines} that are impractical for larger corpora~\citep{mu-etal-2024-beyond, pham-etal-2024-topicgpt, yang-etal-2025-neural}. 
+Moreover, prompting-based approaches \textbf{do not provide probabilistic topic distributions}, a key advantage of neural topic models such as Latent Dirichlet Allocation (LDA)~\citep{blei2003latent}.
+
+% Motivated by recent advances in small language models (SLMs), which combine strong semantic performance with substantially lower computational cost and inference latency~\citep{wang2025survey, belcak2025small}, we propose a simple yet efficient paradigm for topic modeling by \textbf{distilling SLM-induced soft label} (DSL) distributions into probabilistic topic models. 
+Following recent progress in Small Language Models (SLMs), which combine strong semantic performance with substantially lower computational cost and latency~\citep{wang2025survey, belcak2025small}, we propose a simple and efficient paradigm for topic modeling by \textbf{distilling SLM-induced soft label} (DSL) distributions into probabilistic topic models.
+% Beyond the practical motivation, our method also provides a natural Bayesian interpretation. Following prior work arguing that language models can perform implicit Bayesian inference over latent concepts during next-token prediction~\citep{xie2022an, wang2023large}, the LM's 
+% % prompt-conditioned next-token distribution
+% next-token distribution conditioned on both the instruction prompt and input document can be interpreted as an implicit posterior predictive distribution over the theme-relevant words. Under this interpretation, the topic model performs an explicit variational decomposition of this posterior distribution by inducing the document-level distribution over the vocabulary from a mixture of $K$ interpretable topic components.
+% Distilling the next-token distribution over the topic-modeling vocabulary
+% % Distilling the semantically rich soft-label target 
+% can therefore be viewed as projecting the LM-induced posterior predictive signal onto a structured topic space, yielding interpretable document-topic proportions and topic-word distributions.
+% More specifically, instead of relying on sparse BoW representations,
+Specifically, using a simple prompting strategy (e.g., ``\textit{Generate a single word label that captures the underlying theme of the document.}''), SLM is instructed to generate a soft label target encoding the overall document theme. 
+We mapping the probabilities of the next completion token immediately following the prompt as a soft label distribution over the predefined topic modeling vocabulary. 
+% \autoref{fig:target-comparison} presents a concrete example comparing the reconstruction targets used to train topic models (ground-truth class ``\textit{lunar exploration}'').
+% The BoW target provides lexical supervision by assigning normalized probability mass only to words that explicitly appear in the document, resulting in sparse, surface-level signals with words that are semantically distant, such as ``stable'' and ``possible''. 
+% In contrast, the LLM-derived soft label distribution provides semantic supervision by assigning probability mass to thematically related words, including words that do not explicitly occur in the document such as ``astro'', ``space'', and ``astronomy''.
+% }
+By training the neural topic model to reconstruct these dense, semantically-rich soft targets, it learns to infer topics that are more contextually coherent and semantically meaningful. 
+Furthermore, we use the last hidden state representations of the language models as the contextualized inputs for the documents, which provide the necessary context for reconstructing the soft targets.
+From the perspective of implicit Bayesian inference in language models~\citep{xie2022an, wang2023large, li-etal-2025-explicit}, DSL can be viewed as projecting the LM's implicit posterior predictive distribution over theme-relevant words onto the structured hypothesis space of topic models, yielding explicit and interpretable document-topic and topic-word distributions.
+
+
+In summary, our contributions are\footnote{The implementation of our work is available at \url{https://github.com/raymondzmc/dsl-topic-models}}:
+% can be summarized in two-fold:
+% (1) We propose a novel training objective where the topic model learns to reconstruct semantically-grounded soft label distributions from language model;
+% (2) Experiments on three datasets demonstrate the effectiveness of our approach by yielding significant improvements over the baselines in topic quality and assignment accuracy.
+(1) We propose a novel training paradigm for neural topic modeling that uses semantically grounded soft label distributions derived from a language model as the reconstruction objective;
+(2) We demonstrate the effectiveness of our approach through extensive experiments on three datasets, achieving substantial improvements over baseline methods in both topic quality and assignment accuracy;
+(3) We introduce a retrieval-based evaluation metric for topic modeling, showing that our learned document-topic representations substantially improve topic-guided document retrieval across datasets.
+% We demonstrate the effectiveness of our proposal through extensive experiments on 5 datasets, which yields significant improvements over the baselines for topic coherence and produces topic representations that  accurately reflect the semantic content of the documents.
+
+
+
+\begin{figure*}[ht]
+  \centering
+  \includegraphics[width=.9\linewidth]{figures/overview.pdf}
+  \caption{
+  Overview of the proposed DSL framework. Given an input document $x$ and a thematic instruction prompt $\pi$, the language model produces a prompt-conditioned next-token distribution, which is projected onto the topic-model vocabulary to form the semantic soft target $y_{\rm DSL}$. The LM final hidden-state representation $x_{\rm emb}$ is used as the document representation for the topic model $\mathcal{M}$, which infers document-topic proportions $\theta$ and predicts a vocabulary-level distribution $\hat{y}(x)$. Training distills the LM-induced target into the structured topic model by minimizing $D_{\mathrm{KL}}(y_{\rm DSL}\,\|\,\hat{y})$ together with the model-specific regularization term $\mathcal{R}_{\mathcal{M}}$.
+  % Overview of our proposed method. We create training target by prompting the language model to generate a label for the document.
+ %  In \raisebox{.5pt}{\textcircled{\raisebox{-.9pt} {1}}},
+ % the next token distribution over the vocabulary subset of the instruction prompt is used as the soft targets, where in \raisebox{.5pt}{\textcircled{\raisebox{-.9pt} {2}}} we use the KL Divergence as the reconstruction loss for the neural topic model. 
+ % In \raisebox{.5pt}{\textcircled{\raisebox{-.9pt} {3}}}, the last hidden state representation of the final token is used as input representation.
+  % We use the last hidden state representation from the LLM (1) as input representation to the topic model. The reconstruction target is the next t where we prompt the LLM to generate a soft label distribution over the vocabulary as the reconstruction target for the neural topic model.
+  }
+  \label{fig:overview}
+  % \vspace{-1em}
+\end{figure*}
+
+%================
+\section{Related Work}
+% In this section, we discuss related work in neural topic models and recent studies on using LLMs for topic modeling.
+
+\subsection{Neural Topic Models}
+Built upon the generative probabilistic framework described by Latent Dirichlet Allocation (LDA)~\citep{blei2003latent}, the LDA family of neural topic models integrate deep neural network components through the variational autoencoder (VAE) framework \citep{kingma2014auto}, using an encoder to approximate the posterior with a variational distribution $q(z|x)$ and a decoder to reconstruct the document's BoW representation from sampled topic proportions $\theta$.
+% This is done by using an encoder network to approximating the posterior to a variational distribution $q(z|x)$, before the decoder uses the sampled topic proportion $\theta$ to reconstruct the document's BoW representation. 
+For examples, \citet{miao2017discovering} used an encoder to predict the mean and variance of a Gaussian posterior over continuous latent document representations, ProdLDA~\citep{srivastava2017autoencoding} sampled document-topic vectors from a logistic-normal prior using a product-of-experts architecture where document–topic vectors are sampled from a logistic-normal prior.
+% mapped documents into continuous latent representation by using the encoder to predict the mean and variance of a Gaussian posterior, while ProdLDA \citep{srivastava2017autoencoding} used a product-of-experts architecture where document–topic vectors are sampled from a logistic-normal prior.
+% (a laplace approximation to a dirichlet). 
+Another line of work has leveraged the semantic information of pre-trained embeddings \citep{fang-etal-2024-cwtm, abaskohi-etal-2025-cemtm}, examples include the Embedding Topic Model (ETM) \citep{dieng-etal-2020-topic}, which represents topics and words in a shared embedding space, where the document is reconstructed via the inner product between the topic and the initialized word embedding. Building on ProdLDA, CombinedTM \citep{bianchi-etal-2021-pre} concatenated the BoW document input with contextualized Sentence-BERT (SBERT) embeddings \citep{reimers-gurevych-2019-sentence}, while ZeroshotTM~\citep{bianchi-etal-2021-cross} replaced the input entirely with SBERT embeddings. 
+% In our work, we also adopt the ProdLDA architecture without modifications by replacing the input and and reconstruction targets with semantically-rich representations from language models.
+
+Alternatively, clustering-based methods \citep{zhang-etal-2022-neural} congregate contextualized embeddings to semantically similar word or document clusters. For example, \citet{sia-etal-2020-tired} performed clustering on word embeddings and obtain top words using weighing and re-ranking, while BERTopic \citep{grootendorst2022bertopic} performed clustering on document embeddings and use a class-based TF-IDF method to label each topical cluster. While these methods often achieve high coherence, clustering algorithms often have non-linear complexity and cannot efficiently scale-up to large corpora. 
+
+Finally, several approaches have leveraged optimal transport (OT) to regularize or align topic models in the embedding space \citep{nan-etal-2019-topic, zhao2021neural, wang2022representing}. Recent works include ECRTM~\citep{wu2023effective}, which augments VAE-based neural topic models with an embedding clustering regularization term to prevent topic collapse by separating topic embeddings, and FASTopic~\citep{wu2024fastopic}, which employs an OT-based transport plan to align documents, topics, and words in a shared embedding space while reconstructing the BoW representation of documents.
+
+
+
+\subsection{LLMs for Topic Modeling}
+Recent studies have incorporated LLMs in topic modeling research. One line of work used LLMs for the evaluation of topic models, such as rating the quality of the topics \citep{stammbach-etal-2023-revisiting, rahimi-etal-2024-contextualized} and their document representations \citep{yang2025llm}. Another line of work focused on improving short-text topic modeling by using LLMs to expand the original text to obtain a denser BoW representation \citep{akash-chang-2024-enhancing}. More recently, studies have leveraged the capabilities of LLMs to generate topics directly. For example, \citet{mu-etal-2024-large} proposed prompt-based topic extraction framework where topics are directly generated, refined, and summarized through iterative prompting. Similarly, TopicGPT \citep{pham-etal-2024-topicgpt} focused on topic assignment using a pipeline that prompts the LLM to generate topics for each document, before refining the topics and assigning the most probable topic to each document. While the experimental results for these works demonstrated improved interpretability and topic assignment accuracy, these methods do not form a fully probabilistic framework since topics are represented by the natural language description and topic assignments are binary decisions. This limits the ability to model topic uncertainty and capture topic distribution necessary for downstream applications. 
+Finally, \citet{yang-etal-2025-neural} first train a neural topic model with BoW targets before using a LLM to refine word distributions of already learned topics using an optimal-transport alignment loss. This approach is complementary to our proposal as we focus on obtaining a higher quality topic model using the enhanced reconstruction target.
+% Say something about we use smaller Language models.
+
+
+
+
+
+%=================
+\section{Method}
+\label{sec:method}
+
+\autoref{fig:overview} provides an overview of our method. We describe the main components in the following subsections: reconstruction targets (\S\ref{subsec:reconstruction-targets}), the loss function and training objective (\autoref{subsec:loss}), the topic model input (\S\ref{subsec:hidden-input}), and our Bayesian interpretation of the framework (\S\ref{subsec:bayesian-interpretation}).
+
+\subsection{Reconstruction Targets}
+\label{subsec:reconstruction-targets}
+Following the standard practice for topic modeling \citep{hoyle2021automated}, we first pre-process the corpus to build a fixed vocabulary set $V$ from the top-$|V|$ most frequent words after tokenization and stop-word removal.
+% Let $\pi$ denote the thematic instruction prompt. 
+% For each document $x$, we prompt the LM to generate a label that captures the underlying theme of the document (e.g., ``Generate a single-word label capturing the document theme'').
+Let $\pi$ denote the thematic instruction prompt. For each document $x$, we construct a prompt-conditioned input by pairing $x$ with $\pi$, which instructs the LM to predict a concise label for the document's underlying theme (e.g., ``Generate a single-word label capturing the document theme.'').
+Rather than decoding the label, we take the next-token logits $\ell_{\rm{LM}}(x, \pi)$ immediately following the prompt,  where we retain only the entries corresponding to vocab subset $V$, yielding $\ell_V(x, \pi) \in \mathbb{R}^{|V|}$. Finally, we compute the temperature-scaled softmax distribution as the \textit{semantically-grounded soft targets} (\autoref{eq:llm-soft-targets}).
+
+
+\begin{equation}
+y_{\rm{DSL}}(x, \pi)=\mathrm{softmax}\bigg(\frac{\ell_V(x, \pi)}{\tau}\bigg).
+\label{eq:llm-soft-targets}
+\end{equation}
+
+Unlike BoW targets, which assign nonzero mass only to words that explicitly appear in the document, the DSL target $y_{\rm DSL}(x, \pi)$ is a dense distribution over $V$ that can assign probability mass to words absent from the document but
+thematically relevant to it (\autoref{fig:target-comparison}).
+
+
+\subsection{Distilling Soft Label Targets}
+\label{subsec:loss}
+% Our proposed DSL is a training paradigm designed for a broad class of topic models that learn topics through a vocabulary-level predictive distribution.
+DSL is a training paradigm for topic models that learn through vocabulary-level reconstruction.
+We first write this broad class of vocabulary-reconstruction neural topic models in a unified form.
+These models learn topics by predicting a document-conditioned predictive distribution $\hat{y}_{\psi}(x)$ over the vocabulary $V$ and training it against a reconstruction target. This view includes VAE-based neural topic models such as ProdLDA, as well as recent models that retain a BoW reconstruction component while adding embedding-based
+regularization, such as ECRTM~\citep{wu2023effective} and
+FASTopic~\citep{wu2024fastopic}.
+
+For a topic model $\mathcal{M}$ with trainable parameters $\psi$, the standard objective can be written abstractly as minimizing a reconstruction term together with model-specific regularization (\autoref{eq:generic-topic-objective}).
+\begin{equation}
+\mathcal{L}(x)
+=
+\mathcal{D}_{\rm recon}\big(y_{\text{BoW}}(x), \hat{y}_{\psi}(x)\big)
++
+\mathcal{R}_{\mathcal{M}}(x;\psi)
+\label{eq:generic-topic-objective}
+\end{equation}
+Here, $y_{\textrm{BoW}}(x)$ is  the normalized BoW representation of document $x$, reconstruction term
+$\mathcal{D}_{\rm recon}(\cdot)$ is typically the negative log-likelihood (NLL) between normalized BoW representation $y_{\textrm{BoW}}(x)$ and predicted distribution $\hat{y}_{\psi}(x)$, and $\mathcal{R}_{\mathcal{M}}$ collects all model-specific terms that are not the reconstruction objective. For instance, $\mathcal{R}_{\mathcal{M}}$ corresponds to the latent-prior regularizer in ProdLDA, the embedding-clustering regularizer in ECRTM, and the transport-based regularization terms in FASTopic.
+
+\begin{equation}
+\mathcal{L}_{\rm DSL}(x)
+=
+\lambda
+D_{\mathrm{KL}}\left(
+y_{\rm DSL}(x, \pi)
+\;\middle\|\;
+\hat{y}_{\psi}(x)
+\right)
++
+\mathcal{R}_{\mathcal{M}}(x;\psi)
+\label{eq:generic-dsl-objective}
+\end{equation}
+
+The DSL objective is presented in \autoref{eq:generic-dsl-objective}.
+% The only modification is to replace the sparse BoW reconstruction target with the LM-induced semantic label target $y_{\text{DSL}}(x, \pi)$ (\autoref{eq:llm-soft-targets}), where 
+At the objective level, DSL replaces the sparse BoW reconstruction target with the LM-induced semantic target $y_{\rm DSL}(x, \pi)$ from \autoref{eq:llm-soft-targets}, while preserving the model-specific regularization terms.
+The topic model learns to reconstruct the language model distribution via KL divergence similar to the knowledge distillation loss \citep{hinton2015distilling}. 
+The optional hyperparameter $\lambda$ can be used to balance DSL reconstruction and regularization. A formal justification of the KL-based reconstruction objective is provided in \autoref{app:semantic-justification}.
+
+
+\subsection{Hidden State Inputs}
+\label{subsec:hidden-input}
+Motivated by prior work that uses pre-trained contextualized embeddings to improve document representations~\citep{bianchi-etal-2021-pre, fang-etal-2024-cwtm}, we use the LM hidden state as the input representation for the topic model. Let $x_{\rm emb}=h_{\rm LM}(x,\pi)$ denote the final-layer hidden state at the last position of the prompt-conditioned input. For autoregressive LMs, this hidden state is passed to the LM head to produce the next-token logits, making $x_{\rm emb}$ naturally aligned with the DSL target over $V$.
+
+\subsection{Bayesian Interpretation}
+\label{subsec:bayesian-interpretation}
+
+Learning an explicit topic model from the LM-induced target from \autoref{eq:llm-soft-targets} provides a natural Bayesian interpretation. 
+Prior work has interpreted language models as implicit Bayesian predictors over latent concepts during next-token prediction~\citep{xie2022an, wang2023large}.
+% Prior work has shown that LMs can behave as implicit Bayesian predictors over latent concepts during next-token prediction. 
+Under this framework, when conditioned on both the instruction prompt and the input document $x$, LM can be viewed as implicitly inferring a posterior distribution over latent concepts $c$, where $c$ acts as
+an approximate sufficient statistic for the posterior information contained in the prompt-conditioned document context \citep{wang2023large}. The projected next-token distribution $y_{\rm DSL}(x, \pi)$ over $V$ can thus be interpreted as an implicit posterior predictive distribution over theme-relevant vocabulary words.
+For each vocabulary word $v\in V$, this posterior predictive interpretation can be written as \autoref{eq:implicit-posterior-predictive}, where the dependence on the instruction prompt is omitted for notational simplicity.
+
+\begin{equation}
+y_{\rm DSL}(v \mid x, \pi)
+\approx
+\int
+p_{\rm LM}(v \mid c)\,
+p_{\rm LM}(c \mid x, \pi)\,
+dc
+\label{eq:implicit-posterior-predictive}
+\end{equation}
+
+
+Under our proposed DSL framework, topic model infers an explicit probabilistic topic representation from this implicit and unstructured posterior predictive signal.
+\begin{equation}
+\mathcal{P}_{\mathcal{M}}(x_{\rm emb}) = \left\{
+\hat{y}_{\psi}(\cdot \mid x_{\rm emb}): \psi \in \Psi_{\mathcal{M}} \right\} \subseteq \Delta^{|V|-1}
+\label{eq:model-family}
+\end{equation}
+For a topic model $\mathcal{M}$ with trainable parameters $\psi$, \autoref{eq:model-family} denote the family of vocabulary-level distributions that $\mathcal{M}$ can produce for the document representation $x_{\rm emb}$. Unlike  the LM-induced posterior predictive signal, each element of $\mathcal{P}_{\mathcal{M}}$ is constrained by the topic-model structure. For example, for VAE-based topic models, $\hat{y}_{\psi}(x)$ is induced through a low-dimensional topic bottleneck that represents each document using document-topic proportions.
+DSL can therefore be interpreted as distilling the LM's implicit Bayesian prediction over latent concepts, observed through the posterior predictive target $y_{\rm DSL}(x, \pi)$, into an explicit topic model with interpretable document-topic and topic-word distributions.
+% DSL can therefore be interpreted as projecting the LM-induced posterior predictive signal $y_{\rm DSL}(x)$ onto the structured hypothesis space of topic models, yielding explicit document-topic and topic-word distributions.
+Concretely, the KL reconstruction term in \autoref{eq:generic-dsl-objective} implements this conversion by matching the topic model prediction $\hat{y}_{\psi}(x)$ to the LM-induced target
+$y_{\rm DSL}(x, \pi)$ within the structured family $\mathcal{P}_{\mathcal{M}}(x_{\rm emb})$.
+
+% DSL training can therefore be viewed as a regularized KL projection of the
+% LM-induced posterior predictive distribution onto the structured topic-model
+% family:
+% \begin{equation}
+% \psi^\star
+% \in
+% \arg\min_{\psi}
+% \lambda
+% D_{\mathrm{KL}}
+% \left(
+% \hat{y}_{\psi}(x)
+% \;\middle\|\;
+% y_{\rm DSL}(x)
+% \right)
+% +
+% \mathcal{R}_{\mathcal{M}}(x;\psi).
+% \label{eq:bayesian-projection}
+% \end{equation}
+% The reconstruction term aligns the topic model's explicit vocabulary-level
+% prediction with the LM's implicit semantic posterior predictive signal, while
+% $\mathcal{R}_{\mathcal{M}}$ preserves the structural assumptions of the
+% underlying topic model, such as the latent-prior regularizer in ProdLDA, the
+% embedding-clustering regularizer in ECRTM, or the transport-based regularization
+% terms in FASTopic. Thus, DSL does not use the language model to directly
+% generate topics or topic assignments. Instead, it distills the language model's
+% implicit thematic distribution into explicit document-topic proportions and
+% topic-word distributions.
+
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Settings}
+
+\textbf{Metrics. }
+To start, we evaluate the intrinsic quality of the topics through their \textit{coherence} and \textit{diversity}, which have shown to be directly correlated with the interpretability of the topics \citep{dieng-etal-2020-topic, li-etal-2023-diversity}. For topic \textit{coherence}, we use the widely adopted Coherence Value ($\mathbf{C_V}$) \citep{roder2015exploring} and the recently proposed \textbf{LLM} ratings \citep{stammbach-etal-2023-revisiting}.
+% , while 
+% where the latter has shown to be highly correlated with human judgment and even surpasses inter-annotator agreement between humans. 
+For topic \textit{diversity}, we use the Inversed Rank-Biased Overlap (\textbf{I-RBO}) score \citep{terragni2021word, bianchi-etal-2021-pre}. Additionally, following prior studies~\citep{poursabzi-sangdeh-etal-2016-alto, hoyle-etal-2022-neural, pham-etal-2024-topicgpt}, we evaluate topical \textit{assignment accuracy} by measuring how well the most probable topic assignments align with the ground-truth labels through the \textbf{Purity} score~\citep{zhao2001criterion}. Lastly, we propose a retrieval-based metric to assess the effectiveness of the full topical distribution for finding semantically related documents by retrieving top-$N$ documents based on the KL-divergence of topic distribution, and report \textbf{Precision} as the proportion of retrieved documents that share the same ground-truth label as the query.
+% We apply various automatic evaluation metrics to assess different facets of the topic model. 
+
+% To start, we evaluate the intrinsic quality of the inferred topics through their \textit{Coherence} and \textit{Diversity}, which have shown to be directly correlated with the interpretability of the topics \citep{dieng-etal-2020-topic, li-etal-2023-diversity}. 
+% Specifically, to evaluate topic \textit{coherence}, we use \textbf{Normalized Pointwise Mutual Information (NPMI)}~\citep{lau-etal-2014-machine}, \textbf{Word Embedding (WE)}\footnote{We use \texttt{word2vec-google-news-300}~\citep{mikolov2013distributed} for evaluating pairwise embedding similarities.}~\citep{fang2016using}, and the \textbf{LLM} scores \citep{stammbach-etal-2023-revisiting}.
+% For topic \textit{diversity}, we calculate
+% the \textbf{Inversed Rank-Biased Overlap (I-RBO)}~\citep{terragni2021word, bianchi-etal-2021-pre} score. 
+
+% It is worth noting that while NPMI is a popular metric that measures the co-occurrence relationship between topic words in the corpus, it can be easily misled by corpus noise and surface-level patterns, making it less reliable for capturing true semantic coherence among topic words \citep{hoyle2021automated}. On the other hand, the recently proposed LLM score \citep{stammbach-etal-2023-revisiting}, which uses a LLM to rate the relatedness between the words of each topic on a scale of 1-3, has shown to be highly correlated with human judgment and even surpasses inter-annotator agreement between humans.
+
+% % Additionally, we follow prior studies~\citep{poursabzi-sangdeh-etal-2016-alto, hoyle-etal-2022-neural, pham-etal-2024-topicgpt} to the \textit{topical assignment} by measuring the alignment between the predicted assignments with the ground-truth labels using the \textbf{Purity}~\citep{zhao2001criterion} score. (rephrased below:)
+% Additionally, following prior studies~\citep{poursabzi-sangdeh-etal-2016-alto, hoyle-etal-2022-neural, pham-etal-2024-topicgpt}, we evaluate topical \textit{assignment accuracy} by measuring how well the predicted topic assignments align with the ground-truth labels, using the \textbf{Purity} score~\citep{zhao2001criterion}.
+
+% Finally, we propose a retrieval-based metric to assess the \textit{Effectiveness of the Topical Mixtures} for finding semantically related documents by retrieving top-$N$ documents based on the KL-divergence of topic distribution, and computing \textbf{Precision} as the proportion of retrieved documents that share the same ground-truth label as the query.
+% \footnote{We provide a detailed description and settings for the metrics in \secref{sec:evaluation-metric-details}.
+
+
+% \begin{table}[h]
+% \centering
+% \begin{adjustbox}{width=.9\linewidth}
+% \begin{tabular}{@{}lrcc@{}}
+% \toprule
+% Dataset & \# Docs & \# Labels & Average Words \\
+% \midrule
+% DBPedia & 630,000 & 14 &  53 \\
+% 20NewsGroup & 18,173 & 20 & 256   \\
+% StackOverflow & 20,000 & 20 &  9  \\
+% \bottomrule
+% \end{tabular}
+% \end{adjustbox}
+% \caption{Statistics of the $3$ datasets for our experiments.} 
+% \label{tab:datasets}
+% \vspace{-1em}
+% \end{table}
+
+\textbf{Datasets.} We train and evaluate our models on three publicly available text classification datasets with ground-truth labels:
+20NewsGroup, StackOverflow~\citep{xu-etal-2015-short}, and TweetTopic~\citep{antypas-etal-2022-twitter}.
+% as well as 2 multimodal datasets: MSCOCO \citep{lin2014microsoft} and TQA \citep{kembhavi2017you}\footnote{Details of the 5 datasets are described in \autoref{sec:dataset-details}.}.
+For TweetTopic, we filter examples with single labels in order to compute the \textbf{Purity} score.
+Note that both StackOverflow and TweetTopic are short-text datasets that traditional topic models often struggle with. 
+For all datasets, we restrict $V$ to vocabulary words that correspond to single tokens under the LM tokenizer ($98\%$ of words) for efficiency, and set vocab size $|V| = 2000$ following settings from prior work \citep{bianchi-etal-2021-pre}. In \autoref{app:vocab-size-experiments}, we show the performance gains from DSL is consistent for different values of $|V|$. In practice, this parameter can be adjusted or adapted to specific domains without modifying the proposed method.
+
+
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{1.4pt}
+\renewcommand{\arraystretch}{1.1}
+\setlength{\NumCellW}{3em}
+\setlength{\BestCellW}{4em}
+
+\resizebox{.88\textwidth}{!}{%
+\begin{tabular}{
+l
+*{4}{c}
+@{\hspace{4pt}} *{4}{c}
+@{\hspace{4pt}} *{4}{c}
+}
+
+& \dataset{20NewsGroup}
+& \dataset{TweetTopic}
+& \dataset{StackOverflow} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+\textbf{Method}
+& \numcell{\metric{$C_V$}} & \numcell{\metric{LLM}} & \numcell{\metric{IRBO}} & \numcell{\metric{Purity}}
+& \numcell{\metric{$C_V$}} & \numcell{\metric{LLM}} & \numcell{\metric{IRBO}} & \numcell{\metric{Purity}}
+& \numcell{\metric{$C_V$}} & \numcell{\metric{LLM}} & \numcell{\metric{IRBO}} & \numcell{\metric{Purity}} \\
+
+\sectionrow{Baselines}
+
+LDA
+& \numcell{.341} & \numcell{2.22} & \numcell{.977} & \numcell{.301}
+& \numcell{.350} & \numcell{1.95} & \numcell{.992} & \numcell{.441}
+& \numcell{.354} & \numcell{2.00} & \numcell{.977} & \numcell{.174} \\
+
+ProdLDA
+& \numcell{.351} & \numcell{2.49} & \numcell{.992} & \numcell{.356}
+& \numcell{.355} & \numcell{2.11} & \numcell{.994} & \numcell{.533}
+& \numcell{.352} & \numcell{2.62} & \numcell{.991} & \numcell{.265} \\
+
+CombinedTM
+& \numcell{.351} & \numcell{2.57} & \numcell{.993} & \numcell{.391}
+& \numcell{.360} & \numcell{2.36} & \numcell{.988} & \numcell{.588}
+& \numcell{.364} & \numcell{2.85} & \numcell{.986} & \numcell{.306} \\
+
+ZeroshotTM
+& \numcell{.354} & \numcell{2.53} & \numcell{.994} & \numcell{.397}
+& \numcell{.356} & \numcell{2.30} & \numcell{.994} & \numcell{.573}
+& \numcell{.363} & \numcell{2.84} & \numcell{.993} & \numcell{.307} \\
+
+ETM
+& \numcell{.344} & \numcell{2.35} & \numcell{.934} & \numcell{.360}
+& \numcell{.351} & \numcell{2.22} & \numcell{.936} & \numcell{.552}
+& \numcell{.348} & \numcell{2.28} & \numcell{.934} & \numcell{.151} \\
+
+BERTopic
+& \numcell{.360} & \numcell{2.48} & \numcell{.992} & \numcell{.352}
+& \numcell{.364} & \numcell{2.19} & \numcell{.996} & \numcell{.562}
+& \numcell{.374} & \numcell{2.63} & \numcell{.996} & \numcell{.202} \\
+
+ECRTM
+& \numcell{.360} & \numcell{2.28} & \numcell{.999} & \numcell{.364}
+& \numcell{.356} & \numcell{1.85} & \best{1.000} & \numcell{.399}
+& \numcell{.373} & \numcell{1.95} & \best{1.000} & \numcell{.062} \\
+
+FASTopic
+& \numcell{.358} & \numcell{2.59} & \numcell{.999} & \numcell{.416}
+& \numcell{.276} & \numcell{1.96} & \numcell{.626} & \numcell{.557}
+& \numcell{.363} & \numcell{2.30} & \numcell{.687} & \numcell{.171} \\
+
+\sectionrow{ProdLDA + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& \numcell{.381} & \numcell{2.86} & \numcell{.991} & \numcell{.520}
+& \numcell{.392} & \numcell{2.90} & \numcell{.989} & \best{.781}
+& \numcell{.397} & \numcell{2.91} & \numcell{.986} & \numcell{.737} \\
+
+\model{Qwen3.5-0.8B}
+& \numcell{.399} & \numcell{2.86} & \numcell{.980} & \numcell{.542}
+& \numcell{.401} & \numcell{2.86} & \numcell{.976} & \best{.781}
+& \numcell{.403} & \numcell{2.89} & \numcell{.983} & \numcell{.788} \\
+
+\model{Llama-3.2-1B}
+& \numcell{.377} & \best{2.89} & \numcell{.991} & \numcell{.564}
+& \numcell{.387} & \best{2.92} & \numcell{.992} & \best{.784}
+& \numcell{.395} & \best{2.95} & \numcell{.991} & \numcell{.698} \\
+
+\model{Phi-3-mini}
+& \numcell{.370} & \numcell{2.70} & \numcell{.994} & \numcell{.557}
+& \numcell{.386} & \numcell{2.63} & \numcell{.994} & \best{.787}
+& \numcell{.404} & \numcell{2.86} & \numcell{.988} & \best{.803} \\
+
+\model{Llama-3.1-8B}
+& \numcell{.364} & \best{2.87} & \numcell{.993} & \numcell{.559}
+& \numcell{.384} & \numcell{2.88} & \numcell{.993} & \numcell{.774}
+& \numcell{.386} & \best{2.96} & \numcell{.991} & \numcell{.700} \\
+
+\sectionrow{FASTopic + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& \numcell{.344} & \numcell{2.24} & \best{1.000} & \numcell{.510}
+& \numcell{.359} & \numcell{2.04} & \numcell{1.000} & \numcell{.702}
+& \numcell{.384} & \numcell{2.27} & \best{1.000} & \numcell{.508} \\
+
+\model{Qwen3.5-0.8B}
+& \numcell{.347} & \numcell{2.15} & \numcell{1.000} & \numcell{.504}
+& \numcell{.360} & \numcell{1.97} & \numcell{1.000} & \numcell{.695}
+& \numcell{.389} & \numcell{2.29} & \numcell{1.000} & \numcell{.537} \\
+
+\model{Llama-3.2-1B}
+& \numcell{.337} & \numcell{2.20} & \best{1.000} & \numcell{.541}
+& \numcell{.357} & \numcell{2.03} & \numcell{1.000} & \numcell{.703}
+& \numcell{.390} & \numcell{2.32} & \numcell{1.000} & \numcell{.530} \\
+
+\model{Phi-3-mini}
+& \numcell{.336} & \numcell{2.04} & \numcell{1.000} & \numcell{.499}
+& \numcell{.353} & \numcell{1.96} & \numcell{1.000} & \numcell{.705}
+& \numcell{.395} & \numcell{2.31} & \numcell{1.000} & \numcell{.538} \\
+
+\model{Llama-3.1-8B}
+& \numcell{.347} & \numcell{2.07} & \numcell{1.000} & \numcell{.555}
+& \numcell{.355} & \numcell{2.01} & \numcell{1.000} & \numcell{.708}
+& \numcell{.395} & \numcell{2.30} & \numcell{1.000} & \numcell{.542} \\
+
+\sectionrow{ECRTM + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& \numcell{.404} & \numcell{2.82} & \numcell{.985} & \numcell{.521}
+& \numcell{.398} & \numcell{2.82} & \numcell{.983} & \numcell{.767}
+& \best{.410} & \numcell{2.85} & \numcell{.988} & \numcell{.742} \\
+
+\model{Qwen3.5-0.8B}
+& \best{.423} & \numcell{2.82} & \numcell{.975} & \numcell{.561}
+& \best{.406} & \numcell{2.82} & \numcell{.977} & \best{.781}
+& \numcell{.406} & \numcell{2.86} & \numcell{.984} & \best{.805} \\
+
+\model{Llama-3.2-1B}
+& \numcell{.404} & \numcell{2.84} & \numcell{.982} & \best{.582}
+& \numcell{.393} & \numcell{2.81} & \numcell{.984} & \numcell{.777}
+& \numcell{.397} & \numcell{2.92} & \numcell{.992} & \numcell{.708} \\
+
+\model{Phi-3-mini}
+& \numcell{.375} & \numcell{2.78} & \numcell{.989} & \numcell{.536}
+& \numcell{.383} & \numcell{2.72} & \numcell{.987} & \best{.778}
+& \numcell{.404} & \numcell{2.92} & \numcell{.988} & \best{.793} \\
+
+\model{Llama-3.1-8B}
+& \numcell{.388} & \numcell{2.83} & \numcell{.987} & \numcell{.561}
+& \numcell{.386} & \numcell{2.82} & \numcell{.985} & \numcell{.764}
+& \numcell{.393} & \best{2.95} & \numcell{.991} & \numcell{.720}
+\end{tabular}
+}
+\vspace{.5em}
+\caption{
+Automatic evaluation results on the top-15 words averaged over 4 numbers of topics ($K=25, 50, 75, 100$), where results for each $K$ are averaged over 5 random seeds (20 measurements per cell). For each dataset--metric pair, best-performing method and methods that are not significantly different from the best under Welch's independent-samples $t$-test with $\alpha=0.05$ are \textbf{highlighted}.
+}
+\vspace{-1em}
+\label{tab:main-results}
+\end{table*}
+
+
+% In this section, we describe our experiment settings and present the results.
+
+
+% To measure the \textit{coherence} and \textit{diversity} of the topics, we take the top-20 most probable words from the topic-word matrix $\beta$. 
+% For \textit{topic coherence}, which measures the extent to which the words within a topic are related to each other in a meaningful way, we apply three different metrics. \textbf{Normalized Pointwise Mutual Information (NPMI)} \citep{lau-etal-2014-machine} is a popular metric that measures the co-occurrence relationship between topic words in the corpus. While the co-occurrence relationship captured by the NPMI metric is intuitive and correlates with human judgments to some extent \citep{roder2015exploring}, it is easily misled by corpus noise and surface-level patterns, making it less reliable for capturing true semantic coherence among topic words \citep{hoyle2021automated}. Additionally, we also apply \textbf{Word Embedding (WE)} score \citep{fang2016using}, which computes the pairwise word embedding similarity, and \textbf{LLM score} \citep{stammbach-etal-2023-revisiting}, which rates the relatedness of each topic using a LLM on a scale of 1-3. The LLM score have shown to be highly correlated with human judgment as it leverage the NLU capabilities of the LLM to capture the nuances between words. For \textit{topic diversity}, we apply the Inversed Rank-Biased Overlap (I-RBO) \citep{terragni2021word, bianchi-etal-2021-pre}, measuring the rank-aware difference between all combinations of topic pairs. 
+
+% To evaluate the accuracy of \textit{topic assignment}, we apply a cluster similarity metric to measure the alignment between predicted topic assignments with the assignment from the ground-truth classes of the corpus. 
+% Following prior works \citep{poursabzi-sangdeh-etal-2016-alto, hoyle-etal-2022-neural, pham-etal-2024-topicgpt}, we assign each document to the most probable topic and use the \textbf{Purity} score \citep{zhao2001criterion}
+% that matches each ground-truth category with the cluster that has the highest combined precision and recall. 
+
+% Finally, we use a retrieval-based metric to measure the usefulness of the predicted topic embeddings for finding semantically similar documents according the ground-truth label. This is done by retrieving top-$N$ documents based on the KL-divergence of topic distribution, and computing precision as the proportion of retrieved documents that share the same ground-truth label as the query. This metric captures how well the topic space preserves label-consistent neighborhoods and reflects the quality of the learned topic representations in supporting retrieval applications.
+
+% with the most similar predicted topic distribution based on KL divergence and measuring the precision 
+
+% documents with similar predicted topic distribution have equivalent ground-truth topic assignment.
+
+% to measure the geometry induced by the topic mixtures is useful for finding related texts 
+
+% While the purity score only consider the most probable topic assignment of each document, to evaluate the complete document-topic distribution, we introduce an additional metric that measures whether document with similar predicted topic distribution has the same ground-truth label. This is done by retrieving top-$k$ documents with the most similar predicted topic distribution based on KL divergence and measuring whether documents with similar predicted topic distribution have equivalent ground-truth topic assignment.
+
+\subsection{Baselines}
+We compare our approach against a variety of topic modeling baselines to demonstrate the benefits of our proposed method\footnote{Implementation and hyperparameter details of baselines are provided in \autoref{sec:baseline-detailed}.}. Specifically, we choose the following $6$ models from the LDA-family: 
+\textbf{LDA}~\citep{blei2003latent}, 
+\textbf{ProdLDA}~\citep{srivastava2017autoencoding}, 
+\textbf{CombinedTM} \citep{bianchi-etal-2021-pre}, 
+\textbf{ZeroshotTM}~\citep{bianchi-etal-2021-pre}, \textbf{ETM}~\citep{dieng-etal-2020-topic}.
+% for illustrating the benefits of using the soft-label reconstruction targets proposed by our method.
+
+Additionally, 
+% for better context, 
+we also compare with the clustering-based model \textbf{BERTopic}~\citep{grootendorst2022bertopic}, as well as the more recent models \textbf{ECRTM}~\citep{wu2023effective} and ~\textbf{FASTopic}~\citep{wu2024fastopic}.
+% , which uses optimal transport to derive topic representations by aligning pretrained embeddings between documents and topics and between topics and words.
+In our DSL experiments, our method adopts the ProdLDA, ECRTM, and FASTopic architecture without modifications.
+
+% For multimodal topic modeling, we compare with (9)~\textbf{M3L-Contrast}~\citep{zosa-pivovarova-2022-multilingual}, (10)~\textbf{Multimodal ZeroshotTM} \citep{gonzalez-pizarro-carenini-2024-neural}, and the recently proposed (11)~\textbf{CEMTM} \citep{abaskohi2025cemtm}.
+
+% we also compare with two clustering-based topic model \textbf{BERTopic}~\citep{grootendorst2022bertopic} and ECRTM~\citep{wu2023effective}, as well as embedding-based \textbf{CWTM}~\citep{fang-etal-2024-cwtm}, which infers topics directly in the embedding space. Finally, we also 
+
+% We also include the embedding-based \textbf{CWTM}~\citep{fang-etal-2024-cwtm}. Additionally, we also choose 
+% \footnote{Detailed description for each baseline along with their hyperparameter configurations are provided in \secref{sec:baseline-detailed}.}.
+% In particular, ZeroshotTM and CombinedTM uses the identical architecture as ProdLDA but enhance the standard BoW document input with SBERT embeddings \citep{reimers-gurevych-2019-sentence}, while ETM was initialized with pre-trained word2vec \citep{mikolov2013distributed}, where the topic-word distribution is computed as the softmax dot product between topic embeddings and word embeddings.
+
+% Additionally, we also compare with the clustering-based topic model \textbf{BERTopic}, which define topics as the concatenation of documents within the topical cluster, and uses the TF-IDF scores for each clas as the topic-word matrix, and the more recent \textbf{CWTM}, that reconstructs BERT \citep{devlin-etal-2019-bert} document embeddings by learning an importance network that predicts the weight for each token, and aggregates the word-level topic vectors over the whole corpus to obtain
+% \textbf{(1) LDA}\citep{blei2003latent}:
+
+% \textbf{(2) ProdLDA}\citep{srivastava2017autoencoding}: We use the default implementation with the document's BoW representation as input and reconstruction target.
+
+% \textbf{(3) ZeroshotTM} \citep{bianchi-etal-2021-pre}:  Replaces the BoW input of ProdLDA with contextualized SBERT embeddings.
+
+% \textbf{(4) CombinedTM} \citep{bianchi-etal-2021-pre}:  Replaces the BoW input of ProdLDA with concatenation of contextualized SBERT embeddings and BoW representation.
+
+% \textbf{(5) ETM} \citep{bianchi-etal-2021-pre}: Generates the document representation as the dot product between word and topic embedding. We initialize the word embedding using pre-trained word2vec \citep{mikolov2013distributed} (\texttt{word2vec-google-news-300}) and do not further fine-tune the word embeddings during training.
+
+% \textbf{(6) BERTopic} \citep{grootendorst2022bertopic}: Clustering-based topic model that uses Sentence-BERT embedding to identify topics by first clustering document embeddings and then uses a class-based TF-IDF variant to extract topic words.
+
+% \textbf{(7) CWTM} \citep{fang-etal-2024-cwtm}: Embedding-based topic model that projects BERT \citep{devlin-etal-2019-bert} token embedding to latent vector-word vectors and uses an importance weight network to reconstructing the document embedding representation.
+
+
+
+
+% \begin{table}[H]
+% \centering
+% \begin{adjustbox}{width=.9\linewidth}
+% \begin{tabular}{@{}lrcc@{}}
+% \toprule
+% Dataset & \# Docs & \# Labels & Average Words \\
+% \midrule
+% DBPedia & 630,000 & 14 &  53 \\
+% 20NewsGroup & 18,173 & 20 & 256   \\
+% StackOverflow & 20,000 & 20 &  9  \\
+% \bottomrule
+% \end{tabular}
+% \end{adjustbox}
+% \caption{Statistics of the $3$ datasets for our experiments.} 
+% \label{tab:datasets}
+% \vspace{-1em}
+% \end{table}
+
+
+% \subsection{Hyperparameter Settings}
+\subsection{Hyperparameters} 
+Our method uses the identical hyperparameter settings as the baseline models ProdLDA, ECRTM, and FASTopic\footnote{Hyperparameter details are provided in \autoref{sec:hyperparameters}.}.
+For model-specific parameters, we use a temperature of $\tau = 3$, and a loss weight $\lambda = 1e^3$ to balance the reconstruction term with the regularization term. 
+% Motivated by the recent advancements of Small Language Models (SLMs) \citep{wang2025survey, belcak2025small}, 
+% Since the recent Small Language Models (SLMs) \citep{wang2025survey, belcak2025small} have shown strong semantic performances,
+For efficiency, we use five instruction-tuned Small Language Models (SLMs) to compute the soft label targets for training the topic models.
+Specifically, we use \texttt{Llama3.1-8B-Instruct} and \texttt{Llama3.2-1B-Instruct} from the Llama family \citep{grattafiori2024llama}, \texttt{Phi-3-mini} \citep{abdin2024phi}, as well as the more recent \texttt{Qwen3.5-0.8B} \citep{qwen2026qwen35} and \texttt{ERNIE-4.5-0.3B} \citep{ernie2025technicalreport} both of which has shown to be highly capable in instruction following. For baselines requiring contextualized embeddings (i.e., ZeroshotTM, CombinedTM, BERTopic, FASTopic), we use \texttt{GTE-large-en-v1.5} \citep{zhang-etal-2024-mgte}: a strong-performing dense encoder model (0.4B) which has a similar size with our smallest SLM (0.3B).
+% To compute the soft label targets for training the topic models, we use the instruction-tuned models (1B, 3B, and 11B) from the Llama 3.2 family \citep{grattafiori2024llama}. 
+% In particular, 
+% % \texttt{Llama3.2-1B-Instruct} and \texttt{Llama3.2-3B-Instruct} are miniature LLMs designed for on-device inference, while 
+% \texttt{Llama3.2-11B-Vision-Instruct} 
+% is a vison-language model capability of handling 
+% both images and text as input.
+% is a larger LLM that outperforms other text-only models of similar size on NLP benchmarks.
+% In our experiments, we show that even lightweight LLMs can produce sufficient thematic summaries of the document to guide the training of neural topic model. 
+
+\subsection{Automatic Topic Evaluation Results}
+
+In \autoref{tab:main-results}, we present the main experimental
+results on the 3 datasets using automatic topic evaluation metrics
+by averaging over 4 numbers of topics ($K = 25, 50, 75, 100$)%
+\footnote{Complete results (all $K$) presented in
+\autoref{tab:complete-results} of \autoref{sec:complete-results}.}.
+We apply DSL to the three topic models (\textbf{ProdLDA}, \textbf{ECRTM}, and \textbf{FASTopic})
+and five SLMs spanning four model families (ERNIE, Llama, Qwen, Phi).
+Across this 3 $\times$ 5 grid, every backbone--LM combination with
+DSL significantly outperforms all baselines on the \textbf{Purity}
+score by a large margin, demonstrating robust topic assignment
+accuracy regardless of backbone or SLM choice. The three backbones
+complement each other across the remaining metrics. Specifically,  \textbf{ECRTM +
+DSL} consistently achieves the best topic coherence through
+$\mathbf{C_V}$, \textbf{ProdLDA + DSL} achieves the best \textbf{LLM}
+rating, and \textbf{FASTopic + DSL} maintains perfect topic diversity
+(\textbf{I-RBO} = 1.000) on all three datasets. The gains are
+distributed across all four SLM families, indicating that DSL
+effectively transfers the semantically rich soft targets into the
+topic model regardless of the SLM teacher's provenance.
+
+Comparing each DSL variant against its corresponding
+baseline, \textbf{ProdLDA + DSL} improves over ProdLDA across every
+metric on every dataset, most strikingly on \textbf{LLM} rating
+(e.g., 2.49 $\to$ 2.89 on 20NewsGroup) and \textbf{Purity} (e.g.,
+.265 $\to$ .803 on StackOverflow). \textbf{ECRTM + DSL} similarly
+improves ECRTM on nearly every column, especially with Purity score (.062 $\to$ .805 on StackOverflow). In contrast,
+\textbf{FASTopic + DSL} delivers less consistent gains. While it
+substantially improves Purity and I-RBO on TweetTopic and
+StackOverflow where the FASTopic baseline was weakest, on
+20NewsGroup it slightly trails the FASTopic baseline on $C_V$ and
+LLM rating. We attribute this to a target--solver mismatch.
+FASTopic's optimal-transport DSR loss is designed for the
+\textit{sparse} bag-of-words target, whereas DSL produces a much
+\textit{denser} top-$k$ soft-label distribution from the SLM. The
+Sinkhorn solver must then spread topic mass over a wider support,
+weakening the peakedness that drives coherence metrics. ProdLDA's
+and ECRTM's direct reconstruction losses absorb the dense target
+naturally and avoid this trade-off.
+
+From the experiments, \textbf{ProdLDA + DSL} offers the best
+performance--complexity trade-off, where it stays within $\sim$0.02 of
+ECRTM + DSL on $C_V$ and Purity across all three datasets while
+beating ECRTM + DSL on the LLM rating on every dataset, all with the
+minimal architecture of a vanilla VAE with no embedding clustering
+regularization, topic-sparsity constraint, or optimal-transport solver. We therefore recommend ProdLDA + DSL as the default for practical applications, even though ECRTM + DSL achieves the highest $C_V$ score. It is worth noting that the smallest \texttt{ERNIE-4.5-0.3B} significantly outperforms
+ZeroshotTM, CombinedTM, BERTopic, and FASTopic, which use an encoder
+model of a similar size (i.e., \texttt{GTE-large-en-v1.5}) for
+constructing the contextualized document representation. This
+demonstrates the benefits of our approach, which allows the
+topic model to learn high-quality topics through distilling semantic labels from SLMs rather than relying on a sentence-encoder representation alone.
+
+
+% Lastly, we hypothesize that the drop in topic diversity is likely due to the dense reconstruction targets in contrast to the sparse BoW document representations, this phenomenon is explored in \autoref{}.
+
+% achieve the highest or statistically indistinguishable best scores for \texttt{$C_V$}, \texttt{$LLM$} rating, and \texttt{Purity} across all datasets, demonstrating that  small language models have the capacity to 
+
+% By reconstructing the next token distribution of the language model, our approach allows the topic model to learn topic representations that better capture the semantic themes of the documents. We present a detailed ablation study in \autoref{sec:ablation-studies} to determine the performance gain from each component of our design.
+
+% (LLM, NPMI, WE), \textit{Diversity} (IRBO), and \textit{Assignment Accuracy} (Purity) in \autoref{tab:main-results}\footnote{Complete results for all $K$ are presented in \autoref{sec:complete-results}.}. From the results, we demonstrate the advantage of our proposed soft label targets by achieving the best overall LLM score on all three datasets, which has shown to be highly correlated with human judgment \citep{stammbach-etal-2023-revisiting}. Additionally, on the short-text StackOverflow dataset, we achieve the highest Purity score by a wide margin, demonstrating strong alignment with ground-truth labels in sparse data scenarios. For topic \textit{Diversity} (I-RBO), we see that the results from our method achieve competitive performance compared to the baseline, where on the short-text StackOverflow dataset, we outperformed all baselines from LDA family (except BERTopic and CWTM). We also find that 
+% % It is also worth noting
+% there are no significant gains from using the larger 11B model, 
+% % to construct the soft label targets compared to the  1B variant, 
+% demonstrating that even miniature 1B LLMs are effective at guiding neural topic models to produce high-quality topics.
+
+
+% \paragraph{Discussion on Topic Coherence}
+% % Regarding the topic \textit{Coherence},
+% It's unsurprising to see that topic models with the explicit objective of reconstruct the BoW representations (i.e., ProdLDA, ZeroshotTM, CombinedTM) achieve the best NPMI score, since reconstruction objective encourages co-occurring words to be in the same topic. However, as mentioned in \autoref{subsec:evaluation-metrics}, NPMI is an inherently noise proxy for measuring coherence, since co-occurrence can be misled by corpus noise and surface-level patterns, while semantically coherent words that contribute to the same theme (e.g., doctor, hospital, diagnosis, treatment) are assigned low scores if they don't appear together often in the corpus. On the other hand, while WE score computes the coherence based on word embedding similarity, the similarity often captures lexical or semantic proximity (e.g., cash, money), not necessarily thematic alignment (e.g., inflation, economy). Further, due to the limited capacity of the embeddings, they lack the domain-specific knowledge and the sophisticated understanding of language encompassed by LLMs. 
+
+% and the highest purity score in DBPedia and StackOverflow. Regarding topic diversity, we see our method achieve competitive performance, while significantly outperforming all baselines from the LDA family (excluding BERTopic and CWTM) on the short-text StackOverflow dataset. 
+
+
+
+% LLM-generated soft labels for short-text datasets 
+
+% at capturing meaningful thematic representations that are necessary for retrieval applications.
+% \begin{table}[ht]
+% \centering
+% \begin{adjustbox}{width=\linewidth}
+% \begin{tabular}{l *{6}{c}}
+% \toprule
+% \multicolumn{1}{c}{} &
+%   \multicolumn{3}{c}{\large \textbf{TQA}} &
+%   \multicolumn{3}{c}{\large \textbf{MSCOCO}} \\
+% \cmidrule(lr){2-4} \cmidrule(lr){5-7}
+% \multicolumn{1}{c}{} &
+%   \texttt{\small LLM} &
+%   \texttt{\small WE} &
+%   \texttt{\small IRBO} &
+%   \texttt{\small LLM} &
+%   \texttt{\small WE} &
+%   \texttt{\small IRBO} \\
+% \midrule
+% (9) M3L & 2.31 & .165 & .985 & 2.27 & .158 & .984 \\
+% (10) ZeroshotTM & 2.38 & .172 & .986 & 2.34 & .166 & .986 \\
+% (11) CEMTM & \cellcolor{lightblue}{\textbf{2.64}} & .205 & \cellcolor{lightblue}{\textbf{.990}} & 2.60 & .196 & \cellcolor{lightblue}{\textbf{.991}} \\
+% \midrule
+% \multicolumn{6}{c}{\large \textbf{Ours}} \\
+% \midrule
+% Llama-11B (w/ caption) & 2.54 & .198 & .989 & 2.52 & .190 & .990 \\
+% Llama-11B (w/ image) & 2.63 & \cellcolor{lightblue}{\textbf{.212}} & .988 & \cellcolor{lightblue}{\textbf{2.60}} & \cellcolor{lightblue}{\textbf{.201}} & .989 \\
+% \bottomrule
+% \end{tabular}
+% \end{adjustbox}
+% \caption{Multimodal topic modeling results on TQA and MSCOCO datasets. The best results for each metric are \colorbox{lightblue}{\textbf{highlighted}}.}
+% \label{tab:tqa_mscoco_results}
+% \vspace{-1em}
+% \end{table}
+
+% \paragraph{Text-Image Evaluation}
+% % Finally, we perform evaluation to multimodal settings using the \textit{TQA} and \textit{MSCOCO} datasets, where each document is paired with both textual and visual information.
+% % As shown in \autoref{tab:tqa_mscoco_results}, our approach achieve comparable performance to the state-of-the-art CEMTM, demonstrating the benefits of leveraging the capabilities of vision-language models.
+% % However, since we use a lightweight two-layer MLP instead of CEMTM’s token-level importance network, our approach is significantly more efficient. Unlike CEMTM, we also avoid the additional steps of extracting contextual embeddings for every token and aggregating per-token topic vectors to obtain topic–word associations \citep{abaskohi2025cemtm}. 
+% As shown in \autoref{tab:tqa_mscoco_results}, we apply our proposal to text-image datasets by using the images directly (w/ image) and by replacing the image with captions generated by \texttt{gpt-4o} (w/ caption). Our approach achieves comparable performance to the state-of-the-art CEMTM, demonstrating the benefits of our proposal in leveraging vision–language models. Additionally, the lightweight two-layer MLP used in ProdLDA is significantly more efficient than the CEMTM's token-level importance network. Unlike CEMTM, we also avoid the additional steps of extracting contextual embeddings for every token and aggregating per-token topic vectors to obtain topic–word associations \citep{abaskohi2025cemtm}.
+
+
+
+% \subsection{Label Consistency from Topic Distribution}
+% We further assess the quality of topic distribution predictions by measuring consistency of the ground-truth label between documents with similar predicted topic distribution $\theta$.
+
+
+\subsection{Retrieval Evaluation}
+\newcommand{\retrdataset}[1]{\multicolumn{2}{c}{\scriptsize\textbf{#1}}}
+
+\begin{table}[!h]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{0pt}
+\renewcommand{\arraystretch}{1.2}
+
+\begin{adjustbox}{width=.82\linewidth}
+\begin{tabular}{
+@{}l
+@{\hspace{5pt}}c@{\hspace{2pt}}c
+@{\hspace{9pt}}c@{\hspace{2pt}}c
+@{\hspace{9pt}}c@{\hspace{2pt}}c
+@{}
+}
+& \retrdataset{20News}
+& \retrdataset{Tweet}
+& \retrdataset{Stack} \\
+\cmidrule(lr){2-3}
+\cmidrule(lr){4-5}
+\cmidrule(lr){6-7}
+\textbf{Method}
+& \metric{@5} & \metric{@10}
+& \metric{@5} & \metric{@10}
+& \metric{@5} & \metric{@10} \\
+
+\retrsectionrow{Baselines}
+
+LDA
+& .244 & .231
+& .674 & .500
+& .113 & .109 \\
+
+ProdLDA
+& .346 & .334
+& .767 & .619
+& .242 & .231 \\
+
+ZeroShotTM
+& .384 & .373
+& .776 & .647
+& .280 & .268 \\
+
+CombinedTM
+& .366 & .357
+& .744 & .637
+& .260 & .251 \\
+
+ETM
+& .312 & .305
+& .786 & .637
+& .135 & .125 \\
+
+BERTopic
+& .413 & .402
+& .546 & .519
+& .306 & .296 \\
+
+ECRTM
+& .341 & .329
+& .712 & .530
+& .114 & .101 \\
+
+FASTopic
+& .421 & .406
+& .811 & .667
+& .189 & .178 \\
+
+\retrsectionrow{ProdLDA + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& .509 & .499
+& .900 & .844
+& .754 & .746 \\
+
+\model{Llama-3.1-8B}
+& .577 & .565
+& .909 & .854
+& .784 & .772 \\
+
+\model{Llama-3.2-1B}
+& .553 & .543
+& .904 & .846
+& .752 & .741 \\
+
+\model{Qwen-3.5-0.8B}
+& .516 & .508
+& .902 & .847
+& .805 & .799 \\
+
+\model{Phi-3-mini}
+& .563 & .553
+& .900 & .847
+& .834 & .827 \\
+
+\retrsectionrow{ECRTM + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& .559 & .542
+& .924 & .859
+& .799 & .789 \\
+
+\model{Llama-3.1-8B}
+& \best{.634} & \best{.614}
+& \best{.935} & \best{.877}
+& .842 & .829 \\
+
+\model{Llama-3.2-1B}
+& .594 & .579
+& .925 & .862
+& .800 & .788 \\
+
+\model{Qwen-3.5-0.8B}
+& .554 & .542
+& .925 & .861
+& .834 & .827 \\
+
+\model{Phi-3-mini}
+& .624 & .603
+& .933 & \best{.877}
+& \best{.867} & \best{.860} \\
+
+\retrsectionrow{FASTopic + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& .409 & .407
+& .616 & .611
+& .395 & .391 \\
+
+\model{Llama-3.1-8B}
+& .459 & .458
+& .627 & .622
+& .416 & .414 \\
+
+\model{Llama-3.2-1B}
+& .445 & .444
+& .612 & .609
+& .409 & .406 \\
+
+\model{Qwen-3.5-0.8B}
+& .410 & .408
+& .614 & .605
+& .421 & .418 \\
+
+\model{Phi-3-mini}
+& .415 & .412
+& .626 & .616
+& .453 & .447
+\end{tabular}
+\end{adjustbox}
+\vspace{.5em}
+\caption{
+Retrieval evaluation results for precision @5 and @10, averaged over four numbers of topics ($K=25, 50, 75, 100$) $\times$ five random seeds (20 measurements per cell). For each dataset--metric pair, best-performing method and methods that are not significantly different from the best under Welch's independent-samples $t$-test with $\alpha=0.05$ are \textbf{highlighted}.
+}
+\label{tab:retrieval-results}
+\vspace{-2em}
+\end{table}
+
+% \begin{table}[t]%[ht]
+% \centering
+% \begin{adjustbox}{width=\linewidth}
+% \begin{tabular}{l *{6}{c}}
+% \toprule
+% \multicolumn{1}{c}{} &
+%   \multicolumn{2}{c}{\large \textbf{20News}} &
+%   \multicolumn{2}{c}{\large \textbf{Tweet}} &
+%   \multicolumn{2}{c}{\large \textbf{Stack}} \\
+% \cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+% \multicolumn{1}{c}{} &
+%   \texttt{\small P@5} &
+%   \texttt{\small P@10} &
+%   \texttt{\small P@5} &
+%   \texttt{\small P@10} &
+%   \texttt{\small P@5} &
+%   \texttt{\small P@10} \\
+% \midrule
+
+% LDA &
+% .244 & .231 &
+% .674 & .500 &
+% .113 & .109 \\
+% ProdLDA &
+% .346 & .334 &
+% .767 & .619 &
+% .242 & .231 \\
+
+% ZeroShot &
+% .384 & .373 &
+% .776 & .647 &
+% .280 & .268 \\
+
+% Combined &
+% .366 & .357 &
+% .744 & .637 &
+% .260 & .251 \\
+
+% ETM &
+% .312 & .305 &
+% .786 & .637 &
+% .135 & .125 \\
+
+% BERTopic &
+% .413 & .402 &
+% .546 & .519 &
+% .306 & .296 \\
+
+% ECRTM &
+% .341 & .329 &
+% .712 & .530 &
+% .114 & .101 \\
+
+% FASTopic &
+% .421 & .406 &
+% .811 & .667 &
+% .189 & .178 \\
+% \midrule
+% \multicolumn{7}{c}{\large Ours} \\
+% \midrule
+% \texttt{ERNIE-0.3B} &
+% .468 & .458 &
+% \colorbox{lightblue}{\textbf{.839}} & .777 &
+% \colorbox{lightblue}{\textbf{.588}} & \colorbox{lightblue}{\textbf{.580}} \\
+
+% \texttt{Llama-1B} &
+% .502 & .493 &
+% \colorbox{lightblue}{\textbf{.857}} & \colorbox{lightblue}{\textbf{.804}} &
+% \colorbox{lightblue}{\textbf{.588}} & \colorbox{lightblue}{\textbf{.580}} \\
+
+% \texttt{Llama-8B} &
+% \colorbox{lightblue}{\textbf{.520}} & \colorbox{lightblue}{\textbf{.510}} &
+% \colorbox{lightblue}{\textbf{.843}} & .780 &
+% \colorbox{lightblue}{\textbf{.592}} & \colorbox{lightblue}{\textbf{.582}} \\
+
+% % \midrule
+% % \multicolumn{7}{c}{\large Reconstruction Targets ($|V|=2000$)} \\
+% % \midrule
+
+% % BoW &
+% % .227 & .195 &
+% % .760 & .619 &
+% % .286 & .252 \\
+
+% % \texttt{ERNIE-4.5-0.3B} &
+% % .241 & .147 &
+% % .395 & .309 &
+% % .245 & .150 \\
+
+% % \texttt{Llama-3.2-1B} &
+% % .241 & .147 &
+% % .396 & .309 &
+% % .242 & .147 \\
+
+% % \texttt{Llama-3.1-8B}  &
+% % .241 & .147 &
+% % .395 & .309 &
+% % .241 & .145 \\
+
+% \bottomrule
+% \end{tabular}
+% \end{adjustbox}
+% \caption{
+% Retrieval evaluation. Results are averaged over all topic counts and random seeds.
+% For each dataset and metric, methods are compared using Welch’s independent samples $t$-test ($\alpha=0.05$).
+% The best result and those not statistically significantly different from it are \colorbox{lightblue}{\textbf{highlighted in blue}}.
+% % that are not statistically significantly different from the best ($p \ge 0.05$) are \colorbox{lightblue}{\textbf{highlighted in blue}}.
+% }
+% \label{tab:retrieval-results}
+% \vspace{-1em}
+% \end{table}
+
+While the \textbf{Purity} score in \autoref{tab:main-results} measures
+cluster assignment accuracy by evaluating how consistently documents
+with the same label are grouped into the highest-probable topics, we
+propose a retrieval-based evaluation to assess the full topic
+distributions by checking whether documents with similar topic
+distributions also share the same ground-truth labels. Since all
+three datasets contain ground-truth labels, we report the label
+\textit{Precision} for the top-5 (@5) and top-10 (@10) most similar
+documents according to the KL-divergence of the predicted topic
+distributions in \autoref{tab:retrieval-results}.
+
+From the results, we see that \textbf{ProdLDA + DSL} and
+\textbf{ECRTM + DSL} significantly outperform all baselines by a wide
+margin, with \textbf{ECRTM + DSL} achieving the strongest retrieval
+performance overall. The largest gains appear on StackOverflow, where
+the best DSL variant nearly triples the best baseline ($.306 \to .867$
+P@5), demonstrating the superiority of our proposal in handling data
+sparsity for short-text retrieval. The one exception is
+\textbf{FASTopic + DSL}, which trails the other two DSL backbones on
+every dataset and even underperforms the FASTopic baseline on
+TweetTopic ($.811 \to .627$ P@5). This is consistent with our earlier
+finding that FASTopic's optimal-transport objective over-diversifies
+topics under dense SLM targets (I-RBO $=1.000$), weakening the
+fine-grained topic-overlap signal that retrieval requires.
+Lastly, our low-dimensional topic representations offer substantial
+computational and storage advantages over the high-dimensional dense
+embeddings produced by pre-trained encoder models. We hope this
+finding will inspire future works on better leveraging SLMs to learn
+topics for retrieval-oriented applications.
+
+
+% While the \textbf{Purity} score in \autoref{tab:main-results} measures cluster assignment accuracy by evaluating how consistently documents with the same label are grouped into highest probable topics, we propose a retrieval-based evaluation to assess the full topic distributions by assessing whether documents with similar topic distributions also share the same ground-truth labels.
+% Since the 3 datasets with ground-truth labels, we report the label \textit{Precision} for the top-5 (@5) and top-10 (@10) most similar documents according to the KL-divergence of predicted topic distribution in \autoref{tab:retrieval-results}.
+% % \footnote{Retrieval results for all $K$ are presented in \autoref{sec:complete-results}.}.
+% From the results, we see that our models significantly outperform all baselines by a wide margin, demonstrating the effectiveness of our method to learning topic embeddings that closely aligns with human-annotated labels. In particular, we notice the largest performance gain on the StackOverflow dataset, showing the superiority of our proposal to handle data sparsity in short-text retrieval. 
+% Lastly, our low-dimensional topic representations offer substantial computational and storage advantages over traditional methods dense embeddings computed from pre-trained encoder models. We hope this finding will inspire future works on better leveraging SLMs to learn topics for retrieval-oriented applications. 
+
+\section{Analysis}
+
+\newsavebox{\sigcellbox}
+
+\newcommand{\better}[1]{%
+  \begingroup
+  \setlength{\fboxsep}{1.1pt}%
+  \sbox{\sigcellbox}{\textbf{#1}}%
+  \makebox[\wd\sigcellbox][c]{%
+    \rlap{\smash{\kern-\fboxsep\colorbox{lightgreen}{\phantom{\usebox{\sigcellbox}}}}}%
+    \usebox{\sigcellbox}%
+  }%
+  \endgroup
+}
+
+\newcommand{\worse}[1]{%
+  \begingroup
+  \setlength{\fboxsep}{1.1pt}%
+  \sbox{\sigcellbox}{#1}%
+  \makebox[\wd\sigcellbox][c]{%
+    \rlap{\smash{\kern-\fboxsep\colorbox{lightred}{\phantom{\usebox{\sigcellbox}}}}}%
+    \usebox{\sigcellbox}%
+  }%
+  \endgroup
+}
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{0pt}
+\renewcommand{\arraystretch}{1.08}
+
+\begin{adjustbox}{ width=.85\textwidth}
+\begin{tabular}{
+@{}l
+@{\hspace{5pt}}c@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{2pt}}c
+@{\hspace{10pt}}c@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{2pt}}c
+@{\hspace{10pt}}c@{\hspace{2pt}}c@{\hspace{2pt}}c@{\hspace{2pt}}c
+@{}
+}
+
+& \dataset{20NewsGroup}
+& \dataset{TweetTopic}
+& \dataset{StackOverflow} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+\textbf{Ablation}
+& \metric{$C_V$} & \metric{LLM} & \metric{IRBO} & \metric{Purity}
+& \metric{$C_V$} & \metric{LLM} & \metric{IRBO} & \metric{Purity}
+& \metric{$C_V$} & \metric{LLM} & \metric{IRBO} & \metric{Purity} \\
+
+\sectionrow{\model{ERNIE-4.5-0.3B-PT}}
+
+Original
+& .381 & 2.86 & .991 & .520
+& .392 & 2.90 & .989 & .781
+& .397 & 2.91 & .986 & .737 \\
+
+NLL
+& \better{+.024} & \worse{-.09} & \worse{-.023} & \worse{-.046}
+& \better{+.014} & \worse{-.13} & \worse{-.024} & \worse{-.019}
+& \better{+.022} & \worse{-.08} & \worse{-.011} & \worse{-.021} \\
+
+NLL + BoW
+& \worse{-.042} & \worse{-.38} & +.000 & \worse{-.088}
+& \worse{-.034} & \worse{-.73} & \better{+.005} & \worse{-.157}
+& \worse{-.028} & \worse{-.15} & \better{+.007} & \worse{-.363} \\
+
+Embeddings
+& +.000 & -.01 & \worse{-.003} & -.007
+& \better{+.005} & -.02 & \worse{-.004} & \worse{-.060}
+& -.001 & -.01 & \worse{-.007} & \worse{-.224} \\
+
+NLL + BoW + Embeddings
+& \worse{-.027} & \worse{-.33} & \better{+.003} & \worse{-.123}
+& \worse{-.035} & \worse{-.59} & \better{+.004} & \worse{-.208}
+& \worse{-.034} & \worse{-.07} & \better{+.007} & \worse{-.430} \\
+
+\sectionrow{\model{Llama-3.2-1B-Instruct}}
+
+Original
+& .377 & 2.89 & .991 & .564
+& .387 & 2.92 & .992 & .784
+& .395 & 2.95 & .991 & .698 \\
+
+NLL
+& \better{+.021} & \worse{-.15} & \worse{-.023} & \worse{-.061}
+& \better{+.010} & \worse{-.06} & \worse{-.018} & \worse{-.018}
+& \better{+.004} & \worse{-.11} & \worse{-.012} & \worse{-.049} \\
+
+NLL + BoW
+& \worse{-.036} & \worse{-.42} & +.000 & \worse{-.121}
+& \worse{-.033} & \worse{-.78} & \better{+.004} & \worse{-.175}
+& \worse{-.032} & \worse{-.19} & \better{+.002} & \worse{-.363} \\
+
+Embeddings
+& \better{+.005} & -.00 & \worse{-.002} & \worse{-.016}
+& \better{+.003} & -.01 & \worse{-.003} & \worse{-.061}
+& \better{+.008} & \worse{-.04} & \worse{-.006} & \worse{-.230} \\
+
+NLL + BoW + Embeddings
+& \worse{-.023} & \worse{-.36} & \better{+.003} & \worse{-.167}
+& \worse{-.030} & \worse{-.62} & \better{+.002} & \worse{-.211}
+& \worse{-.032} & \worse{-.11} & +.002 & \worse{-.391} \\
+
+\sectionrow{\model{Llama-3.1-8B-Instruct}}
+
+Original
+& .364 & 2.87 & .993 & .559
+& .384 & 2.88 & .993 & .774
+& .386 & 2.96 & .991 & .700 \\
+
+NLL
+& \better{+.032} & \worse{-.11} & \worse{-.020} & \worse{-.059}
+& \better{+.006} & \better{+.03} & \worse{-.035} & -.005
+& \better{+.011} & \worse{-.04} & \worse{-.012} & +.001 \\
+
+NLL + BoW
+& \worse{-.026} & \worse{-.40} & \worse{-.001} & \worse{-.107}
+& \worse{-.026} & \worse{-.76} & \better{+.002} & \worse{-.169}
+& \worse{-.023} & \worse{-.22} & +.001 & \worse{-.354} \\
+
+Embeddings
+& +.002 & -.02 & \worse{-.003} & -.007
+& -.001 & -.02 & \worse{-.003} & \worse{-.058}
+& -.002 & \worse{-.014} & \worse{-.006} & \worse{-.218} \\
+
+NLL + BoW + Embeddings
+& \worse{-.010} & \worse{-.34} & \better{+.001} & \worse{-.162}
+& \worse{-.027} & \worse{-.58} & \better{+.001} & \worse{-.201}
+& \worse{-.023} & \worse{-.12} & +.001 & \worse{-.393}
+\end{tabular}
+\end{adjustbox}
+\vspace{0.7em}
+\caption{
+Ablation experiment results with our three models \model{ERNIE-4.5-0.3B}, \model{Llama-3.2-1B}, and \model{Llama-3.1-8B} averaged over $K = 25, 50, 75, 100$, with five random seeds per $K$. Ablation code: NLL -- negative log-likelihood as reconstruction loss instead of KL-Divergence; BoW -- BoW targets instead of soft label target; Embeddings -- contextualized embeddings from \model{GTE-large-en-v1.5} instead of hidden states from language model. Results that are statistically significantly better and worse than the Original ($p < 0.05$) are highlighted in \colorbox{lightgreen}{\textbf{green}} and \colorbox{lightred}{red}, respectively.
+}
+\vspace{-2em}
+\label{tab:ablation}
+\end{table*}
+
+% \begin{table*}[ht]
+% \centering
+% \begin{adjustbox}{width=\linewidth}
+% \begin{tabular}{l *{12}{c}}
+% \toprule
+% \multicolumn{1}{c}{} &
+%   \multicolumn{4}{c}{\large \textbf{20NewsGroup}} &
+%   \multicolumn{4}{c}{\large \textbf{TweetTopic}} &
+%   \multicolumn{4}{c}{\large \textbf{StackOverflow}} \\
+% \cmidrule(lr){2-5} \cmidrule(lr){6-9} \cmidrule(lr){10-13}
+% Ablation &
+%   $C_V$ & LLM & I-RBO & Purity &
+%   $C_V$ & LLM & I-RBO & Purity &
+%   $C_V$ & LLM & I-RBO & Purity \\
+% \midrule
+
+% \multicolumn{13}{c}{\large \texttt{ERNIE-4.5-0.3B}} \\
+% \midrule
+% Original &
+% .383 & 2.83 & .988 & .501 &
+% .397 & 2.80 & .982 & .765 &
+% .394 & 2.82 & .962 & .632 \\
+
+% .381 & 2.86 & .991 & .520 &
+% .392 & 2.90 & .989 & .781 &
+% .397 & 2.92 & .986 & .737 \\
+% NLL &
+% \colorbox{lightgreen}{\textbf{+.024}} & \colorbox{lightred}{\textbf{-.05}} & \colorbox{lightred}{\textbf{-.019}} & \colorbox{lightred}{\textbf{-.033}} &
+% \colorbox{lightgreen}{\textbf{+.008}} & -.04 & \colorbox{lightred}{\textbf{-.017}} & -.003 &
+% \colorbox{lightgreen}{\textbf{+.025}} & +.02 & \colorbox{lightgreen}{\textbf{+.013}} & \colorbox{lightgreen}{\textbf{+.084}} \\
+% NLL + BoW &
+% \colorbox{lightred}{\textbf{-.043}} & \colorbox{lightred}{\textbf{-.35}} & \colorbox{lightgreen}{\textbf{+.004}} & \colorbox{lightred}{\textbf{-.068}} &
+% \colorbox{lightred}{\textbf{-.040}} & \colorbox{lightred}{\textbf{-.64}} & \colorbox{lightgreen}{\textbf{+.012}} & \colorbox{lightred}{\textbf{-.141}} &
+% \colorbox{lightred}{\textbf{-.025}} & \colorbox{lightred}{\textbf{-.05}} & \colorbox{lightgreen}{\textbf{+.031}} & \colorbox{lightred}{\textbf{-.258}} \\
+% Embeddings &
+% -.002 & \colorbox{lightgreen}{\textbf{+.03}} & +.000 & \colorbox{lightgreen}{\textbf{+.012}} &
+% -.001 & \colorbox{lightgreen}{\textbf{+.08}} & \colorbox{lightgreen}{\textbf{+.003}} & \colorbox{lightred}{\textbf{-.044}} &
+% +.002 & \colorbox{lightgreen}{\textbf{+.08}} & \colorbox{lightgreen}{\textbf{+.017}} & \colorbox{lightred}{\textbf{-.118}} \\
+% NLL + BoW + Embeddings &
+% \colorbox{lightred}{\textbf{-.029}} & \colorbox{lightred}{\textbf{-.30}} & \colorbox{lightgreen}{\textbf{+.006}} & \colorbox{lightred}{\textbf{-.104}} &
+% \colorbox{lightred}{\textbf{-.041}} & \colorbox{lightred}{\textbf{-.50}} & \colorbox{lightgreen}{\textbf{+.012}} & \colorbox{lightred}{\textbf{-.192}} &
+% \colorbox{lightred}{\textbf{-.031}} & +.02 & \colorbox{lightgreen}{\textbf{+.030}} & \colorbox{lightred}{\textbf{-.324}} \\
+
+% \midrule
+% \multicolumn{13}{c}{\large \texttt{Llama-3.2-1B}} \\
+% \midrule
+% Original &
+% .375 & 2.87 & .993 & .559 &
+% .383 & 2.90 & .993 & .781 &
+% .393 & 2.94 & .993 & .689 \\
+% NLL &
+% \colorbox{lightgreen}{\textbf{+.023}} & \colorbox{lightred}{\textbf{-.12}} & \colorbox{lightred}{\textbf{-.024}} & \colorbox{lightred}{\textbf{-.056}} &
+% \colorbox{lightgreen}{\textbf{+.022}} & \colorbox{lightred}{\textbf{-.04}} & \colorbox{lightred}{\textbf{-.030}} & \colorbox{lightred}{\textbf{-.033}} &
+% \colorbox{lightgreen}{\textbf{+.006}} & \colorbox{lightred}{\textbf{-.10}} & \colorbox{lightred}{\textbf{-.014}} & \colorbox{lightred}{\textbf{-.040}} \\
+% NLL + BoW &
+% \colorbox{lightred}{\textbf{-.034}} & \colorbox{lightred}{\textbf{-.39}} & \colorbox{lightred}{\textbf{-.001}} & \colorbox{lightred}{\textbf{-.116}} &
+% \colorbox{lightred}{\textbf{-.030}} & \colorbox{lightred}{\textbf{-.76}} & \colorbox{lightgreen}{\textbf{+.003}} & \colorbox{lightred}{\textbf{-.172}} &
+% \colorbox{lightred}{\textbf{-.031}} & \colorbox{lightred}{\textbf{-.18}} & +.000 & \colorbox{lightred}{\textbf{-.354}} \\
+% Embeddings &
+% \colorbox{lightgreen}{\textbf{+.006}} & \colorbox{lightgreen}{\textbf{+.03}} & \colorbox{lightred}{\textbf{-.004}} & \colorbox{lightred}{\textbf{-.010}} &
+% \colorbox{lightgreen}{\textbf{+.007}} & +.01 & \colorbox{lightred}{\textbf{-.004}} & \colorbox{lightred}{\textbf{-.058}} &
+% \colorbox{lightgreen}{\textbf{+.010}} & \colorbox{lightred}{\textbf{-.03}} & \colorbox{lightred}{\textbf{-.007}} & \colorbox{lightred}{\textbf{-.221}} \\
+% NLL + BoW + Embeddings &
+% \colorbox{lightred}{\textbf{-.021}} & \colorbox{lightred}{\textbf{-.33}} & \colorbox{lightgreen}{\textbf{+.001}} & \colorbox{lightred}{\textbf{-.162}} &
+% \colorbox{lightred}{\textbf{-.027}} & \colorbox{lightred}{\textbf{-.60}} & \colorbox{lightgreen}{\textbf{+.001}} & \colorbox{lightred}{\textbf{-.208}} &
+% \colorbox{lightred}{\textbf{-.030}} & \colorbox{lightred}{\textbf{-.10}} & +.000 & \colorbox{lightred}{\textbf{-.382}} \\
+
+% \midrule
+% \multicolumn{13}{c}{\large \texttt{Llama-3.1-8B}} \\
+% \midrule
+% Original &
+% .364 & 2.87 & .993 & .559 &
+% .384 & 2.88 & .993 & .774 &
+% .386 & 2.96 & .991 & .700 \\
+% NLL &
+% \colorbox{lightgreen}{\textbf{+.032}} & \colorbox{lightred}{\textbf{-.11}} & \colorbox{lightred}{\textbf{-.020}} & \colorbox{lightred}{\textbf{-.059}} &
+% \colorbox{lightgreen}{\textbf{+.006}} & \colorbox{lightgreen}{\textbf{+.03}} & \colorbox{lightred}{\textbf{-.035}} & -.005 &
+% \colorbox{lightgreen}{\textbf{+.011}} & \colorbox{lightred}{\textbf{-.04}} & \colorbox{lightred}{\textbf{-.012}} & +.001 \\
+% NLL + BoW &
+% \colorbox{lightred}{\textbf{-.026}} & \colorbox{lightred}{\textbf{-.40}} & \colorbox{lightred}{\textbf{-.001}} & \colorbox{lightred}{\textbf{-.107}} &
+% \colorbox{lightred}{\textbf{-.026}} & \colorbox{lightred}{\textbf{-.74}} & \colorbox{lightgreen}{\textbf{+.002}} & \colorbox{lightred}{\textbf{-.174}} &
+% \colorbox{lightred}{\textbf{-.023}} & \colorbox{lightred}{\textbf{-.22}} & +.001 & \colorbox{lightred}{\textbf{-.354}} \\
+% Embeddings &
+% +.002 & -.02 & \colorbox{lightred}{\textbf{-.003}} & -.007 &
+% -.001 & -.02 & \colorbox{lightred}{\textbf{-.003}} & \colorbox{lightred}{\textbf{-.058}} &
+% -.002 & \colorbox{lightred}{\textbf{-.014}} & \colorbox{lightred}{\textbf{-.006}} & \colorbox{lightred}{\textbf{-.218}} \\
+% NLL + BoW + Embeddings &
+% \colorbox{lightred}{\textbf{-.010}} & \colorbox{lightred}{\textbf{-.34}} & \colorbox{lightgreen}{\textbf{+.001}} & \colorbox{lightred}{\textbf{-.162}} &
+% \colorbox{lightred}{\textbf{-.027}} & \colorbox{lightred}{\textbf{-.58}} & \colorbox{lightgreen}{\textbf{+.001}} & \colorbox{lightred}{\textbf{-.201}} &
+% \colorbox{lightred}{\textbf{-.023}} & \colorbox{lightred}{\textbf{-.12}} & +.001 & \colorbox{lightred}{\textbf{-.393}} \\
+
+% \bottomrule
+% \end{tabular}
+% \end{adjustbox}
+% \caption{
+% Ablation experiment results with our three models \texttt{ERNIE-4.5-0.3B}, \texttt{Llama-3.2-1B}, and \texttt{Llama-3.1-8B} averaged over $K = 25, 50, 75, 100$, with five random seeds per $K$.
+% Results that are significantly better and worse than the Original ($p < 0.05$) are highlighted in \colorbox{lightgreen}{\textbf{green}} and \colorbox{lightred}{\textbf{red}}, respectively.
+% }
+% \label{tab:ablation-results}
+% \end{table*}
+
+
+
+\subsection{Ablation Studies}
+To assess the individual contributions of each innovation in our proposed method, we conduct ablation experiments with ProdLDA to examine the effects of the three key components described in \autoref{sec:method}, namely, the reconstruction target, the training loss, and the topic model input. We propose the following four ablations: (1) Rather than the temperature-scaled KL-Divergence as the reconstruction loss, we instead use the standard negative log-likelihood from ProdLDA (\textbf{NLL}). (2) Using the NLL loss, we further replace the soft label targets with the BoW document representation as the reconstruction target (\textbf{NLL + BoW}). (3) The final hidden state from language model is replaced with the contextualized embeddings from the similar sized \texttt{GTE-large-en-v1.5} (\textbf{Embedding}). (4) We use \texttt{GTE-large-en-v1.5} embeddings as input along with the BoW reconstruction target and NLL loss, this is equivalent to ZeroshotTM \citep{bianchi-etal-2021-pre} (\textbf{NLL + BoW + Embedding}).
+
+% \begin{itemize}[itemsep=1pt]
+%     \item (NLL) Rather than the temperature-scaled KL-Divergence as the reconstruction loss, we instead use the standard negative log-likelihood from ProdLDA.
+%     \item (NLL + BoW) Using the NLL loss, we further replace the soft label targets with the BoW document representation as the reconstruction target. 
+%     \item (Embedding) The final hidden state from language model is replaced with the contextualized embeddings from the similar sized \texttt{GTE-large-en-v1.5}.
+%     \item (NLL + BoW + Embedding) We use \texttt{GTE-large-en-v1.5} embeddings as input along with the BoW reconstruction target and NLL loss, this is equivalent to \textbf{ZeroshotTM} \citep{bianchi-etal-2021-pre}.
+% \end{itemize}
+% We present the results for the best performing \texttt{Llama-3.2-1B} in \autoref{tab:ablation-llama-3.2-1B} \footnote{The ablation results for all 3 base models is available in Appendix.}.
+
+All the ablation study results are presented in \autoref{tab:ablation}. 
+Our first observation is that replacing the KL loss with the standard NLL results in higher $\mathbf{C_V}$, but lower topic diversity and purity, representing a trade-off between the objectives.
+Since we use KL with temperature scaling, a temperature value $\tau > 1$ flattens the distribution, resulting in a sharper distribution and a higher utilization of lower-probability words. This encourages the topics to cover capture different parts of the vocabulary, leading to more diverse but slightly less concentrated topics (we show the effects of temperature $\tau$ in \autoref{subsec:temperature-values}).
+More importantly, we find that using the standard BoW reconstruction target (NLL + BoW) leads to the largest drop in performance, demonstrating that our semantically-grounded soft targets most significantly contributes to the topic quality and assignment accuracy. 
+Lastly, we find that replacing the SLM hidden states with \texttt{GTE-large-en-v1.5} embeddings (Embeddings) leads to a slight drop in performance compared to original, using the general purpose \texttt{GTE-large-en-v1.5} embeddings to reconstruct the BoW objective (NLL + BoW + Embedding) can even lead to a small increase in topic coherence. This shows that using the SLM's last hidden states is only beneficial for reconstructing our soft label targets and does not offer a significant advantage in the standard topic modeling objective. 
+
+
+\begin{table*}[t]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.2}
+
+\begin{adjustbox}{width=\linewidth}
+\begin{tabular}{@{}l l@{}}
+\toprule
+\textbf{Method} & \textbf{Top-15 Topic Words (\textit{sci.med} -- 20NewsGroup, $K=75$)} \\
+\midrule
+{\tiny LDA (.325)} & \textcolor{green!90!black}{pain}, \textcolor{green!60!black}{problem}, \textcolor{green!90!black}{doctor}, \textcolor{green!40!black}{effect}, \textcolor{black!70}{fat}, \textcolor{black!40}{reaction}, \textcolor{black!70}{recall}, \textcolor{black!70}{extremely}, \textcolor{green!60!black}{like}, \textcolor{green!40!black}{happen}, \textcolor{black!40}{pictures}, \textcolor{green!40!black}{ago}, \textcolor{black!40}{paper}, \textcolor{green!60!black}{sorry}, \textcolor{green!90!black}{think} \\
+{\tiny ProdLDA (.467)} & \textcolor{black!70}{oil}, \textcolor{green!60!black}{water}, \textcolor{black!70}{battery}, \textcolor{black!40}{pain}, \textcolor{green!40!black}{temperature}, \textcolor{green!40!black}{cause}, \textcolor{green!60!black}{food}, \textcolor{black!70}{reaction}, \textcolor{green!90!black}{weight}, \textcolor{green!60!black}{heat}, \textcolor{green!90!black}{cold}, \textcolor{green!90!black}{air}, \textcolor{green!40!black}{pressure}, \textcolor{black!40}{brain}, \textcolor{black!40}{effects} \\
+{\tiny ZeroShotTM (.815)} & \textcolor{green!90!black}{doctor}, \textcolor{black!70}{pain}, \textcolor{green!60!black}{medical}, \textcolor{green!60!black}{patient}, \textcolor{green!90!black}{symptoms}, \textcolor{green!40!black}{treatment}, \textcolor{green!90!black}{doctors}, \textcolor{green!40!black}{medicine}, \textcolor{black!70}{tests}, \textcolor{green!40!black}{diet}, \textcolor{green!60!black}{patients}, \textcolor{black!40}{literature}, \textcolor{black!40}{sick}, \textcolor{black!40}{day}, \textcolor{black!70}{vitamin} \\
+{\tiny CombinedTM (.497)} & \textcolor{black!70}{water}, \textcolor{black!40}{brain}, \textcolor{green!90!black}{food}, \textcolor{green!90!black}{blood}, \textcolor{black!70}{fat}, \textcolor{black!40}{heart}, \textcolor{green!40!black}{cause}, \textcolor{green!60!black}{energy}, \textcolor{green!90!black}{doctor}, \textcolor{green!40!black}{effects}, \textcolor{black!70}{heat}, \textcolor{green!60!black}{pain}, \textcolor{black!40}{reaction}, \textcolor{green!60!black}{eat}, \textcolor{green!40!black}{levels} \\
+{\tiny ETM (.342)} & \textcolor{green!60!black}{new}, \textcolor{black!70}{problem}, \textcolor{green!90!black}{high}, \textcolor{black!40}{end}, \textcolor{green!90!black}{large}, \textcolor{green!60!black}{cost}, \textcolor{black!40}{found}, \textcolor{black!40}{long}, \textcolor{green!40!black}{level}, \textcolor{black!70}{comes}, \textcolor{black!70}{numbers}, \textcolor{green!60!black}{number}, \textcolor{green!40!black}{problems}, \textcolor{green!90!black}{price}, \textcolor{green!40!black}{year} \\
+{\tiny BERTopic (.821)} & \textcolor{green!90!black}{patients}, \textcolor{green!60!black}{disease}, \textcolor{green!40!black}{health}, \textcolor{green!60!black}{doctor}, \textcolor{green!90!black}{medical}, \textcolor{green!40!black}{cancer}, \textcolor{black!70}{vitamin}, \textcolor{green!60!black}{treatment}, \textcolor{black!40}{infection}, \textcolor{green!90!black}{patient}, \textcolor{black!70}{diet}, \textcolor{black!70}{pain}, \textcolor{green!40!black}{doctors}, \textcolor{black!40}{insurance}, \textcolor{black!40}{food} \\
+{\tiny ECRTM (.705)} & \textcolor{green!60!black}{doctor}, \textcolor{green!40!black}{vitamin}, \textcolor{green!40!black}{blood}, \textcolor{green!60!black}{cancer}, \textcolor{black!40}{brain}, \textcolor{black!40}{describes}, \textcolor{green!90!black}{patients}, \textcolor{green!40!black}{causes}, \textcolor{black!70}{infection}, \textcolor{green!90!black}{symptoms}, \textcolor{green!60!black}{disease}, \textcolor{black!70}{age}, \textcolor{black!40}{gain}, \textcolor{green!90!black}{diet}, \textcolor{black!70}{women} \\
+{\tiny FASTopic (.356)} & \textcolor{green!40!black}{easier}, \textcolor{black!40}{comparison}, \textcolor{green!60!black}{differences}, \textcolor{green!40!black}{requirements}, \textcolor{green!90!black}{usually}, \textcolor{black!70}{reduce}, \textcolor{black!70}{compare}, \textcolor{green!60!black}{fairly}, \textcolor{green!90!black}{slightly}, \textcolor{green!60!black}{limit}, \textcolor{black!40}{easily}, \textcolor{green!40!black}{advantage}, \textcolor{green!90!black}{require}, \textcolor{black!70}{equivalent}, \textcolor{black!40}{depends} \\
+{\tiny \textbf{ProdLDA + DSL} (.877)} & \textcolor{green!90!black}{clinical}, \textcolor{green!60!black}{doctor}, \textcolor{green!60!black}{medical}, \textcolor{green!40!black}{disease}, \textcolor{green!60!black}{treatment}, \textcolor{green!90!black}{patient}, \textcolor{green!40!black}{symptoms}, \textcolor{black!70}{doctors}, \textcolor{green!40!black}{infection}, \textcolor{black!40}{pain}, \textcolor{black!40}{body}, \textcolor{black!70}{medicine}, \textcolor{black!40}{care}, \textcolor{green!90!black}{patients}, \textcolor{black!70}{cancer} \\
+\midrule
+\textbf{Method} & \textbf{Top-15 Topic Words (\textit{talk.politics.misc} -- 20NewsGroup, $K=75$)} \\
+\midrule
+{\tiny LDA (.540)} & \textcolor{green!90!black}{people}, \textcolor{green!90!black}{children}, \textcolor{black!70}{know}, \textcolor{green!60!black}{said}, \textcolor{green!40!black}{war}, \textcolor{black!40}{time}, \textcolor{black!40}{like}, \textcolor{black!70}{world}, \textcolor{green!90!black}{life}, \textcolor{green!40!black}{country}, \textcolor{green!60!black}{come}, \textcolor{black!70}{right}, \textcolor{green!40!black}{man}, \textcolor{green!60!black}{think}, \textcolor{black!40}{way} \\
+{\tiny ProdLDA (.526)} & \textcolor{green!40!black}{figures}, \textcolor{green!40!black}{study}, \textcolor{green!60!black}{crimes}, \textcolor{green!90!black}{criminal}, \textcolor{black!70}{men}, \textcolor{green!90!black}{gun}, \textcolor{green!60!black}{crime}, \textcolor{black!70}{statistics}, \textcolor{black!40}{gay}, \textcolor{black!70}{kill}, \textcolor{black!40}{sexual}, \textcolor{green!40!black}{firearms}, \textcolor{black!40}{published}, \textcolor{green!90!black}{violent}, \textcolor{green!60!black}{guns} \\
+{\tiny ZeroShotTM (.734)} & \textcolor{green!60!black}{insurance}, \textcolor{green!40!black}{tax}, \textcolor{black!40}{private}, \textcolor{green!90!black}{taxes}, \textcolor{green!40!black}{costs}, \textcolor{black!40}{doctors}, \textcolor{green!90!black}{pay}, \textcolor{green!60!black}{paying}, \textcolor{black!70}{spend}, \textcolor{green!40!black}{health}, \textcolor{black!70}{spending}, \textcolor{green!60!black}{paid}, \textcolor{green!90!black}{money}, \textcolor{black!40}{price}, \textcolor{black!70}{market} \\
+{\tiny CombinedTM (.690)} & \textcolor{green!40!black}{men}, \textcolor{green!90!black}{gay}, \textcolor{green!60!black}{male}, \textcolor{black!40}{straight}, \textcolor{green!60!black}{homosexuals}, \textcolor{green!90!black}{sexual}, \textcolor{green!40!black}{homosexual}, \textcolor{green!90!black}{sex}, \textcolor{black!40}{article}, \textcolor{black!70}{study}, \textcolor{black!70}{women}, \textcolor{black!40}{report}, \textcolor{black!70}{percent}, \textcolor{green!40!black}{behavior}, \textcolor{green!60!black}{homosexuality} \\
+{\tiny ETM (.523)} & \textcolor{green!60!black}{know}, \textcolor{green!60!black}{people}, \textcolor{green!90!black}{think}, \textcolor{black!40}{time}, \textcolor{green!40!black}{way}, \textcolor{black!70}{good}, \textcolor{green!90!black}{things}, \textcolor{black!70}{want}, \textcolor{black!40}{years}, \textcolor{green!40!black}{course}, \textcolor{black!40}{day}, \textcolor{green!40!black}{come}, \textcolor{black!70}{point}, \textcolor{green!90!black}{going}, \textcolor{green!60!black}{thing} \\
+{\tiny BERTopic (.579)} & \textcolor{green!90!black}{government}, \textcolor{green!60!black}{taxes}, \textcolor{green!40!black}{tax}, \textcolor{black!40}{party}, \textcolor{black!70}{billion}, \textcolor{green!40!black}{dollars}, \textcolor{green!60!black}{economy}, \textcolor{green!40!black}{pay}, \textcolor{green!90!black}{spending}, \textcolor{black!70}{power}, \textcolor{green!60!black}{money}, \textcolor{black!40}{parties}, \textcolor{black!70}{state}, \textcolor{black!40}{people}, \textcolor{green!90!black}{society} \\
+{\tiny ECRTM (.734)} & \textcolor{green!60!black}{homosexuality}, \textcolor{black!70}{sexual}, \textcolor{green!40!black}{verses}, \textcolor{green!90!black}{sin}, \textcolor{green!40!black}{passage}, \textcolor{black!40}{teaching}, \textcolor{black!70}{ancient}, \textcolor{black!40}{quotes}, \textcolor{green!60!black}{men}, \textcolor{green!90!black}{sins}, \textcolor{black!40}{relationship}, \textcolor{black!70}{behavior}, \textcolor{green!90!black}{homosexual}, \textcolor{green!60!black}{pray}, \textcolor{green!40!black}{desire} \\
+{\tiny FASTopic (.695)} & \textcolor{green!60!black}{entry}, \textcolor{green!60!black}{file}, \textcolor{green!40!black}{code}, \textcolor{black!70}{program}, \textcolor{black!70}{include}, \textcolor{green!90!black}{output}, \textcolor{black!70}{section}, \textcolor{green!60!black}{write}, \textcolor{green!90!black}{char}, \textcolor{green!40!black}{files}, \textcolor{black!40}{build}, \textcolor{black!40}{return}, \textcolor{green!90!black}{int}, \textcolor{black!40}{function}, \textcolor{green!40!black}{line} \\
+{\tiny \textbf{ProdLDA + DSL}(.778)} & \textcolor{green!90!black}{sexual}, \textcolor{green!60!black}{homosexuals}, \textcolor{green!60!black}{homosexual}, \textcolor{green!90!black}{homosexuality}, \textcolor{green!90!black}{sex}, \textcolor{green!60!black}{gay}, \textcolor{green!40!black}{male}, \textcolor{green!40!black}{marriage}, \textcolor{black!40}{women}, \textcolor{green!40!black}{men}, \textcolor{black!70}{relationship}, \textcolor{black!70}{society}, \textcolor{black!40}{social}, \textcolor{black!70}{woman}, \textcolor{black!40}{family} \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+
+\caption{Top-15 words of the most aligned topic per method for two ground-truth classes, selected as the two (class, $K$) cases with the largest per-topic $C_V$ margin where \textbf{ProdLDA + DSL} with \texttt{ERNIE-4.5-0.3B} strictly outperforms all baselines. Each word's color encodes its leave-one-out $C_V$ contribution within its topic (5 quantile bins per topic; darker green = higher contribution, gray = low contribution). The per-topic $C_V$ score is shown after each method name.}
+\vspace{-2em}
+\label{tab:20newsgroup-topic-visualization}
+\end{table*}
+
+
+
+
+\subsection{Temperature Values}
+\label{subsec:temperature-values}
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/temperature_ablation_20newsgroups.png}
+\caption{Results on 20Newsgroups with \texttt{ERNIE-4.5-0.3B} for various temperature $\tau$ values. The values are normalized to visualize relative trends.}
+\label{fig:temperature-analysis-20newsgroups}
+\vspace{-2em}
+\end{figure}
+
+To investigate the effects of temperature $\tau$
+on the topic qualities, we conduct experiments with various $\tau$ values and visualize the results for 20NewsGroups with \texttt{ERNIE-4.5-0.3B} in \autoref{fig:temperature-analysis-20newsgroups}\footnote{We find a similar trend on the two other datasets, which is visualized in \autoref{fig:temperature-analysis-all} of \autoref{sec:temperature-analysis-all}.}.
+% Since softmax temperature $\tau$ (\autoref{eq:llm-soft-targets}) controls the sharpness of the distribution, for small values (i.e., $\tau < 2$), softmax becomes close to argmax, causing the topic model to lose semantic breadth during reconstruction, where gradient concentrate on a few words in the vocab. 
+% This results in topics are that either coherent nor diverse. 
+% For higher temperatures $\tau > 5$, the topic model learns to reconstruct a softer distribution, where thematically-similar words become more likely to appear in the same topic, resulting in higher coherence but lower diversity. 
+Since the softmax temperature $\tau$ (\autoref{eq:llm-soft-targets}) controls the sharpness of the distribution, small values (i.e., $\tau < 2$) cause the softmax to approach an argmax operation. This concentrates gradients on only a few vocabulary words during reconstruction, leading the topic model to lose semantic breadth, resulting in learned topics are neither coherent nor diverse. In contrast, at higher temperatures ($\tau > 5$), the model learns to reconstruct a softer distribution in which thematically similar words are more likely to co-occur within the same topic, yielding higher coherence but reduced diversity.
+% Therefore, we choose $\tau =3$, a value large enough to provide semantically-informative target without excessive redundancies.
+Accordingly, we choose $\tau = 3$ as a balance between semantic informativeness and redundancy.
+
+
+% \subsection{Vocab Size}
+
+
+\subsection{Instruction Prompt Sensitivity}
+% %We perform experiments to assess the sensitivity of our method to different prompts. 
+% % We use OpenAI's \texttt{gpt-4o} to generate $5$ different variants of the instruction prompt through asking the model to rephrase the instruction ``Generate a label that capture the overall theme of the document below''.  
+% Using OpenAI’s \texttt{gpt-4o}, we generate five distinct rephrasings of the original instruction prompt, ``Generate a label that captures the overall theme of the document below,'' by asking the model to paraphrase it.
+% The resulting variants %of the  instruction prompt 
+% are shown in \autoref{tab:instruction-prompts}.
+
+% \begin{table}[ht]
+% \centering
+% \begin{tabularx}{\linewidth}{X}
+% \toprule
+% \textbf{Instruction Prompt Variants} \\
+% \midrule
+% 1. \textit{Name the document's central theme.}\\ 
+% 2. \textit{Give a single label that sums up the text.} \\  
+% 3. \textit{Tag the document with its main idea.} \\ 
+% 4. \textit{Read the following document in full, identify its principal theme, and output a one‑word label that best conveys that unifying concept.} \\
+% 5. \textit{Generate a tag that captures the primary theme running through the entire document.} \\ 
+% \bottomrule
+% \end{tabularx}
+% \caption{The 5 variants of the rephrased instruction prompt generated by \texttt{gpt-4o} to construct the soft labels for training topic models.}
+% \label{tab:instruction-prompts}
+% \vspace{-1em}
+% \end{table}
+
+
+To quantify whether topic model performance varies with the instruction prompt, we conduct experiments on the 20NewsGroup dataset with \texttt{ERNIE-4.5-0.3B} for $K=50$ using 5 different prompts\footnote{Details of the 5 prompt variants described in \autoref{sec:prompt-sensitivity-details}.}. For each prompt, we train 5 random seeds and apply the two-way Analysis of Variance (ANOVA) test \citep{scheffe1999analysis} to compare variance between prompt choice and random seed. For coherence metrics, the estimated main effects of prompt and seed are statistically indistinguishable for $\mathbf{C_V}$ ($F_{\rm{prompt}}=1$, $F_{\rm{seed}}=1$) and \textbf{LLM} ratings ($F_{\rm{prompt}}=0.72$, $F_{\rm{seed}}=0.37$),  indicating that changing the prompt wording has no more effect than simply re-running with a different random seed. For topic diversity and \textbf{Purity}, prompt choice explains approximately $10$ times more variance than seed choice for \textbf{I-RBO} ($F_{\rm{prompt}}=42.4$, $F_{\rm{seed}}=4.4$) and $5$ times more for \textbf{Purity} ($F_{\rm{prompt}}=9.8$, $F_{\rm{seed}}=2.1$). This is likely due to the instruction steering the language model towards a particular facets, therefore changing the breadth of topic coverage.
+
+
+
+% We apply the one-way Analysis of Variance (ANOVA) test \citep{scheffe1999analysis} which compares the inter-prompt mean-square with the intra-prompt mean-square by treating the prompt as the fixed factor. We then compute the random-effects variance decomposition by converting the two mean-square terms into variance components, where we see that 
+% the variance across prompts account for $4.1\%$ of the total variance for \textbf{LLM} score and $70.3\%$ of the total variance for \textbf{I-RBO}. 
+% This implies that nearly all variance for LLM scores are attributed to random seeds fluctuation, which further means that the coherence of the resulting topics is nearly prompt-invariant, while topic diversity is highly sensitive to changes in the instruction prompt.
+% We use the one-way Analysis of Variance (ANOVA) test \citep{scheffe1999analysis}, treating the prompt as the fixed factor, to compare the variation between prompts (inter-prompt MS) and within prompts (intra-prompt MS). We then perform a random-effects variance decomposition by converting these mean squares into variance components. 
+% Results show that differences between prompts account for only $\textbf{4.1\%}$ of the total variance in LLM score, and $\textbf{70.3\%}$ of the variance in I-RBO. 
+% This indicates that LLM score variability is largely due to random seed effects, making topic coherence nearly invariant to prompt changes. In contrast, topic diversity (I-RBO) is highly sensitive to the prompt, likely due to the instruction steering the LLM
+% % the model
+% towards a particular facets, which changes the breadth of topic coverage.
+% it uncovers.
+
+
+% Additionally, we compare the performance variance with 3 LDA-based topic models (i.e., \textbf{LDA}, \textbf{ProdLDA}, and \textbf{ZeroshotTM}) by training each models across 25 random seeds.
+% We use box and whisker plots (\autoref{fig:boxplots}) to visualize the score distributions for $K=50, 100$, where the blue and orange box encodes the inter-quartile range (IQR) for \textbf{LLM} and \textbf{I-RBO} score, respectively. 
+
+
+% \begin{figure}[t]
+% \centering
+% \begin{subfigure}{\linewidth}
+%     \includegraphics[width=\linewidth]{figures/llm_and_irbo_by_model_K50.png}
+%     \caption{$K=50$}
+% \end{subfigure}
+% % \vspace{1em}
+% \begin{subfigure}{\linewidth}
+%     \includegraphics[width=\linewidth]{figures/llm_and_irbo_by_model_K100.png}
+%     \caption{$K=100$}
+% \end{subfigure}
+% \caption{Box and whisker plots that visualizes the variance of \textbf{LLM} and \textbf{I-RBO} score between random seeds for baselines LDA, ProdLDA, ZeroshotTM and the variance across both $5$ instructions prompts and $5$  random seeds for our approach with \texttt{Llama3.2-1B-Instruct}.}
+% \label{fig:boxplots}
+% \vspace{-1em}
+% \end{figure}
+
+
+\subsection{Qualitative Results}
+We provide qualitative examples in
+\autoref{tab:20newsgroup-topic-visualization} to inspect the topics produced
+by each method on the 20NewsGroup dataset. For each method we display the
+topic most aligned with a given ground-truth class, where alignment is
+computed as the topic containing the largest number of documents from that
+class (equivalently, the topic with the highest inverse Purity score). We
+ select two ground-truth classes from
+\textbf{ProdLDA + DSL} with \texttt{ERNIE-4.5-0.3B} on per-topic $C_V$ ( \textit{sci.med} and
+\textit{talk.politics.misc}), both at $K=75$. Within each topic, the
+per-word shading encodes the leave-one-out $C_V$ contribution, where darker
+green words anchor the topic's coherence, while gray words are only
+weakly bonded to the rest of the cluster.
+
+Our method captures the core terminology of each class. For
+\textit{sci.med}, ProdLDA + DSL produces a tightly clinical cluster
+anchored on ``clinical'', ``patient'', ``patients'', and ``treatment'',
+achieving a per-topic $C_V$ of $.877$ versus the strongest baseline ceiling
+of $.821$ (BERTopic). For \textit{talk.politics.misc}, our model surfaces
+a coherent civil-rights debate cluster anchored on ``sexual'',
+``homosexuality'', and ``sex'', again with the highest per-topic $C_V$ ($.778$). The peripheral words in both rows (``cancer'', ``body'', ``care'' for medicine; ``society'', ``social'', ``family'' for politics) stay on-theme even when their individual LOO contribution is low, indicating that the dense soft-label target draws in semantically related vocabulary that may not appear in any single document.
+
+
+% Lastly, 
+% We provide some examples from the 20NewsGroup dataset to qualitatively analyze the topics. This is done by randomly selecting a seed from topic models trained with $K=50$, and finding the topic containing the largest number of documents from the ground-truth label. This is equivalent to finding the topic with the highest inverse Purity score. 
+% From \autoref{tab:20newsgroup-topic-visualization}, we see that the topics from our methods consistently contain words that capture the core terminology of the ground-truth class (e.g., ``atheism'' for class \textit{alt.atheism}), where all of the top-15 words are semantically consistent and captures thematic depth beyond surface-level word co-occurrence.
+% For example, in the category \textit{alt.atheism}, topics from our three base models emphasize discourse-level concepts (``argument'', ``rational'', ``logic'', ``debate'') rather than merely religious keywords, reflecting the argumentative and epistemological nature of the dataset. 
+% In contrast, ETM yields generic terms such as ``know'', ``think'', and ``problem'', which are only weakly related to this theme. 
+% Meanwhile, BERTopic and FASTTopic blur the focus on atheism by mixing it with tangentially related concepts like ``homosexuality'' and religious ``sin''---terms that often co-occur in religious debates but are not central to the topic itself.
+% These findings demonstrate that LLM-based topic modeling captures deeper semantic structure beyond simple lexical co-occurrence.
+
+% Lastly, we provide some examples from the 20NewsGroup dataset to qualitatively analyze the topics. This is done by randomly selecting a seed from topic models trained with $K=50$, and finding the topic containing the largest number of documents from the ground-truth label. This is equivalent to finding the topic with the highest inverse Purity score. 
+% % \textcolor{blue}{
+% From \autoref{tab:20newsgroup-topic-visualization}, we see that the topics from our methods consistently contain words that capture the core terminology of the ground-truth class (e.g., ``atheism'' for class \textit{alt.atheism}), where all of the top-15 words are semantically consistent and captures thematic depth beyond surface-level word co-occurrence. 
+% For instance, in the category \textit{alt.atheism}, while baselines like FASTopic and BERTopic conflate atheism with tangentially related topics such as ``homosexuality'' and religious ``sin'', terms that frequently co-occur in religious debates, our models capture the argumentative and epistemological nature of the dataset that are more central to the atheism discourse (e.g., ``argument'', ``debate'', ``claim'', ``deny'', ``rational'').
+
+
+\section{Conclusion}
+% In this work, 
+We propose a novel technique for enhancing neural topic modeling that uses the NLU capabilities of the language models to generate %a 
+a soft label distribution as the reconstruction target for neural topic models. 
+This is done by projecting the temperature-scaled softmax distribution of the next token prediction immediately following the prompt onto our defined vocab, before training the neural topic model using the final hidden state as input.
+In extensive experiments on three datasets, we demonstrated that our approach 
+achieve SOTA performance in terms of topic coherence and purity, while maintaining high diversity. We also introduce a retrieval-based evaluation metric where we showed that the predicted topic distribution from our method achieved the highest precision for retrieving semantically similar documents according to the ground-truth label.
+% , demonstrating the superiority of our method for retrieval-oriented applications.
+
+In future work, we will experiment with different prompting strategies such as few-shot learning \citep{brown2020language} and chain-of-thought (CoT) prompting \citep{wei2022chain}  to more effectively generate the soft label targets.
+We will also adapt our approach to perform multi-modal topic modeling using different types of vision-language models.
+Lastly, we will also explore the effectiveness of using the inferred topic for retrieval-based downstream applications, which has shown to be a promising direction based on the results from our experiments.
+
+
+%=====================
+\section*{Acknowledgments}
+The authors thank the anonymous reviewers and
+the Area Chair for their valuable feedback and suggestions. The authors acknowledge the support
+of the Natural Sciences and Engineering Research
+Council of Canada (NSERC). Nous remercions le
+Conseil de recherches en sciences naturelles et en
+génie du Canada (CRSNG) de son soutien.
+
+%=====================
+\section*{Impact Statement}
+
+This paper presents work with goal of improving neural topic modeling through semantically enriched supervision from small language models. Topic models are commonly used to support exploration, organization, retrieval, and summarization of large text corpora. By improving topic coherence, assignment accuracy, and retrieval-oriented document representations, our method may help researchers and practitioners analyze large collections of text more effectively while preserving the interpretable document-topic and topic-word structure of probabilistic topic models.
+
+The main societal risks of this work arise from the data and language models used in topic modeling applications. Real-world text corpora may contain private information, harmful stereotypes, misinformation, or other biased and inaccurate content. Since our method distills semantic signals from language models, it may also inherit or amplify biases encoded in those models, leading to topics or document assignments that appear coherent but reflect undesirable social assumptions. In sensitive domains, such as healthcare, hiring, education, political communication, or user profiling, topic models should therefore be treated as exploratory tools rather than definitive decision-making systems.
+
+There is also a potential risk that improved topic modeling and retrieval could be used for undesirable forms of large-scale monitoring, profiling, or manipulation of individuals or communities. These risks are not unique to our method, but stronger semantic topic representations may make such applications easier. Potential mitigations include applying appropriate privacy protections and data governance procedures, filtering or auditing vocabularies and corpora before deployment, evaluating topic quality across demographic and domain-specific subgroups where relevant, and involving domain experts when interpreting topics in high-stakes settings.
+
+Our experiments were conducted on standard public benchmark datasets in controlled research settings. We do not deploy the proposed method in any real-world decision-making system. We encourage future applications of this work to report dataset provenance, pre-processing choices, vocabulary filtering criteria, model-selection decisions, and known limitations, especially when topic models are used to analyze sensitive or user-generated text.
+
+% \paragraph{AI Assistance} We used AI coding assistants for setting up the initial code base as well as debugging. 
+% % We also used commercial AI chatbots to refine the paper for fixing any writing errors and generating initial drafts and rewriting to improve clarity.  
+% We used commercial AI assistants for grammar checking and style refinements at the paragraph level.
+% All scientific contributions, including experimental design, analysis, and interpretation were conducted by the authors to preserve academic integrity.
+
+
+% Authors are \textbf{required} to include a statement of the potential broader
+% impact of their work, including its ethical aspects and future societal
+% consequences. This statement should be in an unnumbered section at the end of
+% the paper (co-located with Acknowledgements -- the two may appear in either
+% order, but both must be before References), and does not count toward the paper
+% page limit. In many cases, where the ethical impacts and expected societal
+% implications are those that are well established when advancing the field of
+% Machine Learning, substantial discussion is not required, and a simple
+% statement such as the following will suffice:
+
+% ``This paper presents work whose goal is to advance the field of Machine
+% Learning. There are many potential societal consequences of our work, none
+% which we feel must be specifically highlighted here.''
+
+% The above statement can be used verbatim in such cases, but we encourage
+% authors to think about whether there is content which does warrant further
+% discussion, as this statement will be apparent if the paper is later flagged
+% for ethics review.
+
+
+% \section*{Limitations}
+% \textcolor{blue}{TO REMOVE}
+
+% Despite the encouraging results, our approach inherits a number of practical  limitations that are important to acknowledge and that we hope will stimulate follow-up work.
+% To start, our proposal requires a forward pass through an instruction-tuned language for constructing the soft targets for \emph{every} document. While we have shown that lightweight SLM models (0.4B, 1B, 8B) are capable of producing high quality topics, this still %results in a need for 
+% induce a slight overhead during pre-processing compared to
+% % computational resources than %compared to 
+% the classic BoW-based topic models. However, we note that this is a significant improvement over other LLM-based topic generation framework, since we only require a single forward pass which can be further sped up through batching and other inference acceleration methods.
+% % , which may induce a small overhead costs for deployment.
+% % In \autoref{fig:boxplots} and \autoref{fig:tau-values}, we show that diversity is highly sensitive to small changes in the instruction prompt and to the softmax temperature~$\tau$, we leave developing a %the 
+% % more sophisticated data-driven method to set these configurations as future work.
+% Lastly, all our experiments are conducted on English datasets with topics based on a vocabulary of fixed size (2000 words), we acknowledge other languages may require further pre-processing steps to obtain a suitable %set of 
+% vocabulary for producing coherent topics. 
+
+
+
+
+%=================================
+% \section*{Software and Data}
+% If a paper is accepted, we strongly encourage the publication of software and
+% data with the camera-ready version of the paper whenever appropriate. This can
+% be done by including a URL in the camera-ready copy. However, \textbf{do not}
+% include URLs that reveal your institution or identity in your submission for
+% review. Instead, provide an anonymous URL or upload the material as
+% ``Supplementary Material'' into the OpenReview reviewing system. Note that
+% reviewers are not required to look at this material when writing their review.
+
+% Acknowledgements should only appear in the accepted version.
+% \section*{Acknowledgements}
+
+
+
+%% In the unusual situation where you want a paper to appear in the
+% references without citing it in the main text, use \nocite
+% \nocite{langley00}
+
+\bibliography{bib/custom,bib/part1, bib/part2}
+\bibliographystyle{icml2026}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% APPENDIX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\appendix
+
+\section{Datasets}
+\label{sec:dataset-details}
+
+\begin{table}[h]
+\centering
+\begin{adjustbox}{width=.95\linewidth}
+\begin{tabular}{@{}llrrr@{}}
+\toprule
+Dataset & Domain & \# Docs & \# Labels & Avg. Words \\
+\midrule
+20NewsGroup & Email & 18,846 & 20 & 182 \\
+TweetTopic & Tweet & 21,996 & 19 & 28 \\
+StackOverflow & Forum & 20,000 & 20 & 9 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\caption{Statistics of the three datasets used in our experiments.}
+\label{tab:datasets}
+\vspace{-1em}
+\end{table}
+
+\autoref{tab:datasets} summarizes the datasets used in \autoref{sec:experiments}. We evaluate on three publicly available text classification corpora with ground-truth labels: 20NewsGroup\footnote{\url{http://qwone.com/\~jason/20Newsgroups}}, TweetTopic\footnote{\url{https://huggingface.co/datasets/cardiffnlp/tweet_topic_multi}}~\citep{antypas-etal-2022-twitter}, and StackOverflow\footnote{\url{https://github.com/jacoxu/StackOverflow}}~\citep{xu-etal-2015-short}. For TweetTopic, we keep only single-label examples so that Purity and retrieval precision can be computed against one reference label per document. TweetTopic and StackOverflow are short-text datasets, where sparse BoW reconstruction is especially challenging.
+
+\section{Evaluation Metrics}
+\label{sec:evaluation-metric-details}
+
+% We evaluate topic models using the metrics reported in \autoref{tab:main-results}: topic coherence, topic diversity, topic assignment accuracy, and retrieval precision.
+
+\paragraph{Topic coherence.}
+For automatic coherence, we use $\mathbf{C_V}$~\citep{roder2015exploring}, which has been shown to outperform earlier co-occurrence metrics such as NPMI, UCI, and UMass in correlating with human judgments~\citep{newman-etal-2010-automatic, stevens-etal-2012-exploring, lau-etal-2014-machine, roder2015exploring}. Following prior work~\citep{roder2015exploring, wu2023effective, wu2024fastopic}, we compute word co-occurrences using a large Wikipedia reference corpus through the \texttt{Palmetto}\footnote{\url{https://github.com/dice-group/Palmetto}} toolkit.
+
+We also report \textbf{LLM} ratings following \citet{stammbach-etal-2023-revisiting}. Specifically, we use \texttt{gpt-4o} through the OpenAI API\footnote{\url{https://openai.com/api}} to score the top words of each topic on a 1--3 relatedness scale. The system prompt is shown in \autoref{tab:llm-rating-prompt}.
+
+\begin{table}[h]
+\centering
+\begin{tabularx}{\linewidth}{X}
+\toprule
+\textbf{LLM Rating System Prompt} \\
+\midrule
+You are a helpful assistant evaluating the top words of a topic model output for a given topic. Please rate how related the following words are to each other on a scale from 1 to 3 (``1'' = not very related, ``2'' = moderately related, ``3'' = very related).\\[2pt]
+Reply with a single number, indicating the overall appropriateness of the topic.\\
+\bottomrule
+\end{tabularx}
+\caption{System prompt used for the \textbf{LLM} topic-coherence rating.}
+\label{tab:llm-rating-prompt}
+\vspace{-1em}
+\end{table}
+
+\paragraph{Topic Diversity}
+We use inverse Rank-Biased Overlap (\textbf{I-RBO})~\citep{terragni2021word, bianchi-etal-2021-pre}. Unlike standard Topic Diversity~\citep{dieng-etal-2020-topic}, which only measures set overlap, I-RBO is rank-aware and penalizes overlap more strongly among top-ranked words that dominate human interpretation.
+
+\paragraph{Topic Assignment Accurac.}
+Following prior studies~\citep{poursabzi-sangdeh-etal-2016-alto, hoyle-etal-2022-neural}, we evaluate assignment accuracy with harmonic \textbf{Purity}~\citep{zhao2001criterion}. Each document is assigned to its highest-probability topic, and each ground-truth class is matched to the topic that maximizes the F1 score. The final score is aggregated with class-size weighting.
+
+\paragraph{Retrieval Precision}
+To evaluate the full document-topic distribution rather than only the top-1 topic assignment, we retrieve documents using the KL divergence between predicted topic distributions. For a query document $i$, let $R_N(i)$ denote the $N$ nearest documents according to $D_{\mathrm{KL}}(\theta_i\|\theta_j)$ (excluding query itself), where $\ell_i$ is the ground-truth label of document $i$ (\autoref{eq:retrieval-precision}).
+\begin{equation}
+\mathrm{P@}N
+=
+\frac{1}{|\mathcal{D}|}
+\sum_{i\in\mathcal{D}}
+\frac{1}{N}
+\sum_{j\in R_N(i)}
+\mathbf{1}\{\ell_i=\ell_j\}
+\label{eq:retrieval-precision}
+\end{equation}
+
+
+\section{Baselines}
+\label{sec:baseline-detailed}
+
+We compare against eight baselines spanning LDA-family neural topic models, clustering-based topic models, and recent regularized neural topic models. For LDA, ProdLDA, CombinedTM, ZeroshotTM, and ETM, we use the OCTIS library~\citep{terragni-etal-2021-octis} with the default settings for each model unless otherwise specified.
+
+\paragraph{LDA}
+We use the \texttt{Gensim} implementation~\citep{rehurek2010-gensim} provided by OCTIS. The model uses online variational Bayes~\citep{hoffman2010online} with a batch size of 2000, one pass through the corpus, a gamma convergence threshold of $0.001$, learning-rate decay $0.5$, and offset $1.0$.
+
+\paragraph{ProdLDA}
+We use the OCTIS implementation of ProdLDA~\citep{srivastava2017autoencoding}, which employs a VAE with a product-of-experts decoder. The encoder has two hidden layers with 200 neurons, softplus activations~\citep{zheng2015improving}, and dropout rate $0.2$. The model is trained with Adam~\citep{kingma2014adam}, learning rate $2\times 10^{-3}$, batch size 64, and 100 epochs. Following the default setup, the prior parameters are optimized and inference averages 10 samples.
+
+\paragraph{CombinedTM and ZeroshotTM}
+CombinedTM~\citep{bianchi-etal-2021-pre} uses the same VAE architecture as ProdLDA but concatenates the BoW input with contextualized sentence embeddings. ZeroshotTM~\citep{bianchi-etal-2021-cross} uses contextualized embeddings as input without the BoW vector. In our experiments, the contextualized embeddings are produced by \texttt{GTE-large-en-v1.5} rather than SBERT, as described in \autoref{sec:hyperparameters}.
+
+\paragraph{ETM}
+The Embedding Topic Model~\citep{dieng-etal-2020-topic} represents topics and words in a shared embedding space. We initialize word embeddings with \texttt{word2vec-google-news-300}~\citep{mikolov2013distributed} downloaded through \texttt{Gensim}; these embeddings are not fine-tuned. The encoder maps normalized BoW vectors to topic proportions through a two-layer network with hidden size 800, ReLU activation, dropout rate $0.5$, Adam learning rate $5\times10^{-3}$, weight decay $1.2\times10^{-6}$, and early stopping with patience 5.
+
+\paragraph{BERTopic}
+We use the official BERTopic implementation\footnote{\url{https://github.com/MaartenGr/BERTopic}}~\citep{grootendorst2022bertopic}. Documents are embedded with the same contextual encoder used for the embedding-based baselines, projected to 5 dimensions using UMAP~\citep{McInnes2018}, and clustered with HDBSCAN~\citep{campello2013density}. Topic-word distributions are computed using class-based TF-IDF over the documents assigned to each cluster. HDBSCAN outliers are excluded from topic evaluation.
+
+\paragraph{ECRTM}
+We adopt the original ECRTM implementation\footnote{\url{https://github.com/BobXWu/ECRTM}}~\citep{wu2023effective}. ECRTM augments a VAE topic model with embedding clustering regularization to separate topic embeddings and mitigate topic collapse. The encoder has two hidden layers with 200 neurons and softplus activations. Topic and word embeddings are 200-dimensional; the topic-word matrix is computed with a softmax over negative pairwise Euclidean distances using temperature $0.2$. Word embeddings are initialized with 200-dimensional GloVe embeddings~\citep{pennington-etal-2014-glove}. The ECR term is solved as an optimal transport problem with Sinkhorn iterations~\citep{sinkhorn1964relationship, cuturi2013sinkhorn}, using $\alpha=20.0$, at most 1000 iterations, and loss weight $\lambda_{\mathrm{ECR}}=100.0$. The model is trained for 200 epochs with Adam, learning rate $0.002$, and batch size 64.
+
+\paragraph{FASTopic}
+We use the TopMost implementation~\citep{wu-etal-2024-towards-topmost} of FASTopic~\citep{wu2024fastopic}. FASTopic encodes documents with contextualized embeddings and uses optimal-transport regularization to align documents, topics, and words while retaining BoW reconstruction. We use the default hyperparameters: document-topic regularization $\alpha_{DT}=3.0$, topic-word regularization $\alpha_{TW}=2.0$, learning rate $0.002$, and 200 training epochs.
+
+\section{Hyperparameter Settings}
+\label{sec:hyperparameters}
+
+For all datasets, we build the topic-modeling vocabulary $V$ from the top-$|V|$ most frequent words after tokenization and stop-word removal, and use $|V|=2000$ in the main experiments. As described in \autoref{sec:experiments}, we keep vocabulary words that correspond to single tokens under the LM tokenizer for efficient next-token projection.
+
+For \textbf{ProdLDA + DSL}, we use the same architecture and optimizer settings as the ProdLDA baseline: a two-layer MLP encoder with hidden size 200 and softplus activation, Adam with learning rate $2\times10^{-3}$ and cosine decay, batch size 64, and 100 epochs. For \textbf{ECRTM + DSL} and \textbf{FASTopic + DSL}, we keep the original model-specific architecture and regularization settings described in \autoref{sec:baseline-detailed}; DSL only replaces the BoW reconstruction target with the LM-induced target $y_{\rm DSL}$ and uses the KL reconstruction term in \autoref{eq:generic-dsl-objective}.
+
+For DSL-specific hyperparameters, we use temperature $\tau=3$ in \autoref{eq:llm-soft-targets} and reconstruction weight $\lambda=10^3$ in \autoref{eq:generic-dsl-objective}. For baselines requiring contextualized document embeddings, namely CombinedTM, ZeroshotTM, BERTopic, and FASTopic, we use \texttt{GTE-large-en-v1.5}\footnote{\url{https://huggingface.co/Alibaba-NLP/gte-large-en-v1.5}}~\citep{zhang-etal-2024-mgte}, a 0.4B dense encoder with hidden size 1024.
+
+\section{Temperature Analysis}
+\label{sec:temperature-analysis-all}
+
+The experiment results for different temperature values $\tau$ on 20NewsGroup, TweetTopic, and StackOverflow are visualized in \autoref{fig:temperature-analysis-all}. Across datasets, we observe similar qualitative trends. Topic diversity and assignment accuracy tend to peak near $\tau\approx3$, while very small values make the softmax target close to a one-hot distribution and very large values make the target overly diffuse. StackOverflow shows a weaker diversity drop at high temperature, likely because its short technical titles induce more varied LM targets. These trends support the default choice $\tau=3$ used in the main experiments.
+
+\begin{figure}[ht!]
+    \centering
+    \begin{subfigure}[t]{.9\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/temperature_ablation_20newsgroups.png}
+        \caption{20NewsGroup}
+        \label{fig:temp-20news}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/temperature_ablation_tweet_topic.png}
+        \caption{TweetTopic}
+        \label{fig:temp-tweet}
+    \end{subfigure}\hfill
+    \begin{subfigure}[t]{\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/temperature_ablation_stackoverflow.png}
+        \caption{StackOverflow}
+        \label{fig:temp-stack}
+    \end{subfigure}
+    \caption{Results on 20NewsGroup, TweetTopic, and StackOverflow with \texttt{ERNIE-4.5-0.3B} for different temperature values $\tau$. Metric values are normalized to visualize relative trends.}
+    \label{fig:temperature-analysis-all}
+    \vspace{-1em}
+\end{figure}
+
+\section{Prompts for Sensitivity Analysis}
+\label{sec:prompt-sensitivity-details}
+
+Using \texttt{gpt-4o}, we generated five rephrasings of the instruction prompt, ``Generate a label that captures the overall theme of the document below.'' The resulting prompt variants are shown in \autoref{tab:instruction-prompts}. These are the prompts used for the prompt-sensitivity analysis in the main text.
+
+\begin{table}[H]
+\centering
+\begin{tabularx}{\linewidth}{X}
+\toprule
+\textbf{Instruction Prompt Variants} \\
+\midrule
+1. \textit{Name the document's central theme.}\\
+2. \textit{Give a single label that sums up the text.} \\
+3. \textit{Tag the document with its main idea.} \\
+4. \textit{Read the following document in full, identify its principal theme, and output a one-word label that best conveys that unifying concept.} \\
+5. \textit{Generate a tag that captures the primary theme running through the entire document.} \\
+\bottomrule
+\end{tabularx}
+\vspace{.5em}
+\caption{Five rephrased instruction prompts used to construct soft labels for the prompt-sensitivity analysis.}
+\label{tab:instruction-prompts}
+\end{table}
+
+\section{Experiments with Different Vocabulary Sizes}
+\label{app:vocab-size-experiments}
+
+We present results with different vocabulary sizes in \autoref{fig:vocab-size-analysis}. DSL with \texttt{ERNIE-4.5-0.3B} achieves the best or near-best performance across vocabulary sizes. The performance gap between DSL and BoW-based baselines generally increases as vocabulary size grows, which is consistent with our motivation: dense semantic targets can assign useful mass to theme-relevant words beyond the observed document tokens, while sparse BoW targets become increasingly incomplete as the candidate vocabulary expands.
+
+\begin{figure*}[ht!]
+    \centering
+    \begin{subfigure}[t]{.45\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/vocab_size_cv_wiki.png}
+        \caption{$C_V$}
+    \end{subfigure}
+    \begin{subfigure}[t]{.45\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/vocab_size_llm_rating.png}
+        \caption{LLM Ratings}
+    \end{subfigure}
+    \begin{subfigure}[t]{.45\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/vocab_size_inverted_rbo.png}
+        \caption{I-RBO}
+    \end{subfigure}
+    \begin{subfigure}[t]{.45\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{figures/vocab_size_purity.png}
+        \caption{Purity}
+    \end{subfigure}
+    \caption{Effect of vocabulary size on topic model performance across four evaluation metrics on 20NewsGroup. Results are shown for vocabulary sizes 500, 1,000, 2,000, and 4,000. DSL with \texttt{ERNIE-4.5-0.3B} is shown in red.}
+    \label{fig:vocab-size-analysis}
+    \vspace{-1em}
+\end{figure*}
+
+% \section{Additional Experiments}
+% \label{app:rebuttal-experiments}
+
+\section{Layer Selection for LM Hidden-State Inputs}
+\label{app:layer-selection}
+
+\autoref{tab:layer-selection} evaluates which representation should be used as the topic-model input as different layers could encode different features \citep{niu-etal-2022-bert, jin-etal-2025-exploring}. We find that the final hidden state performs best overall since the same hidden state is passed to the LM head to produce the next-token logits, supporting the design choice in \autoref{subsec:hidden-input}.
+
+\begin{table}[h]
+\centering
+\begin{adjustbox}{width=.95\linewidth}
+\begin{tabular}{lcccc}
+\toprule
+Input Representation & $C_V$ & LLM & I-RBO & Purity \\
+\midrule
+\texttt{GTE-large-en-v1.5} & .381 & 2.85 & .988 & .513 \\
+Layer 6 (middle) & .379 & 2.68 & .982 & .501 \\
+Layer 12 (3/4 depth) & .377 & 2.83 & .991 & .512 \\
+Final layer (ours) & .381 & 2.86 & .991 & .520 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\caption{Layer-selection experiment on 20NewsGroup using \texttt{ERNIE-4.5-0.3B}. Results are averaged across topic counts and random seeds.}
+\label{tab:layer-selection}
+\end{table}
+
+\section{Target Sparsity and Topic Diversity}
+\label{app:target-sparsity}
+
+We run a small-scale experiment to check whether topic diversity can be controlled by sparsifying the dense target distribution. In \autoref{tab:target-sparsity}, we keep only the top-$k$ logits of $y_{\rm DSL}$ before renormalization on TweetTopic. Sparse DSL targets improve I-RBO relative to the full target while preserving large gains in LLM rating and Purity over BoW-based baselines, confirming that the coherence-diversity trade-off can be tuned through target sparsity.
+
+\begin{table}[h]
+\centering
+\begin{adjustbox}{width=.9\linewidth}
+\begin{tabular}{lccccc}
+\toprule
+Method & Top Words & $C_V$ & LLM & I-RBO & Purity \\
+\midrule
+ProdLDA & $\sim$5.2 (BoW) & .352 & 2.14 & .994 & .532 \\
+ZeroshotTM & $\sim$5.2 (BoW) & .351 & 2.31 & .994 & .575 \\
+DSL & 10 & .388 & 2.66 & .998 & .744 \\
+DSL & 50 & .384 & 2.79 & .998 & .771 \\
+DSL & 100 & .380 & 2.79 & .997 & .771 \\
+DSL & 500 & .383 & 2.92 & .996 & .779 \\
+DSL & 1000 & .383 & 2.90 & .992 & .780 \\
+DSL & Full & .388 & 2.88 & .989 & .779 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\vspace{.5em}
+\caption{Target-sparsity analysis on TweetTopic using \texttt{ERNIE-4.5-0.3B}. Top-$k$ DSL targets are renormalized after retaining the $k$ largest entries.}
+\label{tab:target-sparsity}
+\vspace{-1em}
+\end{table}
+
+\section{Mathematical Justification of Semantic Reconstruction}
+\label{app:semantic-justification}
+
+% This appendix complements \autoref{subsec:bayesian-interpretation} and \autoref{subsec:loss}. We show that the KL reconstruction term in \autoref{eq:generic-dsl-objective} is a dense semantic reconstruction objective: it matches the LM-induced posterior predictive signal $y_{\rm DSL}$ with the vocabulary-level predictive distribution produced by the topic model, while the model-specific regularizer preserves the structured topic representation.
+
+\subsection{Implicit Posterior Predictive Target}
+
+Let $V$ denote the fixed topic-modeling vocabulary. For each document $x$ and thematic instruction prompt $\pi$, the frozen LM produces next-token logits $\ell_{\rm LM}(x,\pi)$. Restricting these logits to $V$ gives $\ell_V(x,\pi)\in\mathbb{R}^{|V|}$, and the DSL target is
+\begin{equation}
+y_{\rm DSL}(x,\pi)
+=
+\mathrm{softmax}\!\left(\frac{\ell_V(x,\pi)}{\tau}\right)
+\in \Delta^{|V|-1}.
+\label{eq:app-y-dsl}
+\end{equation}
+
+Following the implicit Bayesian interpretation of language models, the prompt-conditioned next-token distribution can be viewed as a posterior predictive distribution over words after marginalizing an implicit latent concept $c$:
+\begin{equation}
+p_{\rm LM}(v\mid x,\pi)
+\approx
+\int p_{\rm LM}(v\mid c)\,p_{\rm LM}(c\mid x,\pi)\,dc.
+\label{eq:app-implicit-posterior}
+\end{equation}
+The target $y_{\rm DSL}$ is the vocabulary-restricted and temperature-scaled version of this semantic posterior predictive signal. We do not assume that the latent concept $c$ is observed or explicitly represented by the LM; it is used only to motivate why the next-token distribution contains thematic information beyond the observed BoW support.
+
+\subsection{Structured Topic-Model Family}
+
+For a topic model $\mathcal{M}$ with trainable parameters $\psi$, let $\hat{y}_{\psi}(\cdot\mid x_{\rm emb})$ denote the vocabulary-level predictive distribution produced for document representation $x_{\rm emb}$. The set of distributions representable by the model for a fixed document is
+\begin{equation}
+\mathcal{P}_{\mathcal{M}}(x_{\rm emb})
+=
+\left\{
+\hat{y}_{\psi}(\cdot\mid x_{\rm emb}) : \psi\in\Psi_{\mathcal{M}}
+\right\}
+\subseteq \Delta^{|V|-1}.
+\label{eq:app-model-family}
+\end{equation}
+
+For VAE-based topic models such as ProdLDA, the encoder defines a variational posterior $q_{\phi}(z\mid x_{\rm emb})$ over a $K$-dimensional latent topic variable, with document-topic proportions $\theta=\mathrm{softmax}(z)$. The decoder and topic-word parameters $\boldsymbol{\beta}$ induce
+\begin{equation}
+\hat{y}_{\phi,\boldsymbol{\beta}}(\cdot\mid x_{\rm emb})
+=
+\mathbb{E}_{z\sim q_{\phi}(z\mid x_{\rm emb})}
+\left[p(\cdot\mid z,\boldsymbol{\beta})\right].
+\label{eq:app-topic-predictive}
+\end{equation}
+Thus, unlike the unstructured LM next-token distribution, every distribution in $\mathcal{P}_{\mathcal{M}}(x_{\rm emb})$ must pass through the topic bottleneck and is tied to corpus-level topic-word parameters.
+
+\subsection{Forward-KL Reconstruction as Dense Semantic Cross-Entropy}
+
+The DSL reconstruction term in \autoref{eq:generic-dsl-objective} is
+\begin{align}
+&D_{\mathrm{KL}}\!\left(
+y_{\rm DSL}(x,\pi)
+\;\middle\|\;
+\hat{y}_{\psi}(\cdot\mid x_{\rm emb})
+\right) \\
+&=
+\sum_{v\in V}
+y_{\rm DSL}(v\mid x,\pi)
+\log
+\frac{y_{\rm DSL}(v\mid x,\pi)}
+{\hat{y}_{\psi}(v\mid x_{\rm emb})}.
+\label{eq:app-forward-kl}
+\end{align}
+Since the entropy of $y_{\rm DSL}$ is fixed w.r.t. $\psi$, minimizing \autoref{eq:app-forward-kl} is equivalent to minimizing the CE:
+\begin{equation}
+-\sum_{v\in V}
+y_{\rm DSL}(v\mid x,\pi)
+\log \hat{y}_{\psi}(v\mid x_{\rm emb}).
+\label{eq:app-dense-ce}
+\end{equation}
+Therefore, DSL is the direct analogue of BoW reconstruction with a dense, LM-induced semantic target replacing the sparse empirical word-count target.
+
+\paragraph{Exact realizability.}
+If $y_{\rm DSL}(x,\pi)\in\mathcal{P}_{\mathcal{M}}(x_{\rm emb})$, then there exists $\psi^\star$ such that
+$\hat{y}_{\psi^\star}(\cdot\mid x_{\rm emb})=y_{\rm DSL}(x,\pi)$, and the reconstruction KL is zero.
+
+\paragraph{Approximate realizability.}
+If $y_{\rm DSL}(x,\pi)\notin\mathcal{P}_{\mathcal{M}}(x_{\rm emb})$, then minimizing the reconstruction term yields
+\begin{equation}
+\hat{y}_{\psi^\star}(\cdot\mid x_{\rm emb})
+\in
+\arg\min_{p\in\mathcal{P}_{\mathcal{M}}(x_{\rm emb})}
+D_{\mathrm{KL}}\!\left(y_{\rm DSL}(x,\pi)\,\|\,p\right),
+\label{eq:app-forward-kl-projection}
+\end{equation}
+which is the closest structured topic-model approximation to the LM-induced semantic target under the forward KL direction used in the main objective.
+
+\subsection{Relation to Bag-of-Words Reconstruction}
+
+In standard BoW, the target is the empirical normalized word-count distribution $y_{\rm BoW}(x)$, limited to words observed in the document.
+This produces sparse lexical supervision. In contrast, $y_{\rm DSL}(x,\pi)$ is dense over $V$ and can assign probability mass to theme-relevant words absent from the document:
+\begin{equation}
+y_{\rm DSL}(v\mid x,\pi)>0
+\quad\text{for many }v\notin\mathrm{supp}(x).
+\end{equation}
+The reconstruction loss therefore encourages the topic model to explain a semantic distribution rather than only the observed lexical surface form. This distinction explains why DSL can recover thematically relevant words that do not appear in the document, as illustrated in \autoref{fig:target-comparison}.
+
+\subsection{Regularized Implicit-to-Explicit Bayesian Interpretation}
+
+Combining the dense semantic reconstruction term with the model-specific regularizer gives the per-document DSL objective
+\begin{equation}
+\min_{\psi}
+\lambda
+D_{\mathrm{KL}}\!\left(
+y_{\rm DSL}(x,\pi)
+\;\middle\|\;
+\hat{y}_{\psi}(\cdot\mid x_{\rm emb})
+\right)
++
+\mathcal{R}_{\mathcal{M}}(x;\psi).
+\label{eq:app-regularized-dsl}
+\end{equation}
+For ProdLDA, $\mathcal{R}_{\mathcal{M}}$ is the variational prior regularizer $D_{\mathrm{KL}}(q_{\phi}(z\mid x_{\rm emb})\|p(z))$; for ECRTM and FASTopic, it additionally or alternatively includes the corresponding embedding-clustering or optimal-transport regularization terms. Thus, the first term aligns the explicit topic-model prediction with the LM's implicit semantic posterior predictive target, while the regularizer preserves the structural assumptions of the underlying topic model.
+
+This gives DSL an implicit-to-explicit Bayesian interpretation. The LM supplies an implicit, prompt-conditioned posterior predictive signal over theme-relevant vocabulary words. The topic model then converts this unstructured signal into explicit document-topic proportions and topic-word distributions by matching it within the structured family $\mathcal{P}_{\mathcal{M}}(x_{\rm emb})$. As a result, DSL does not use the LM to directly generate topics or hard topic assignments; it distills the LM's thematic posterior predictive signal into a probabilistic topic model that supports interpretation, uncertainty-aware document representations, and retrieval.
+
+
+\section{Complete Experiment Results}
+\label{sec:complete-results}
+
+We display the complete automatic topic evaluation results for each number of topics $K=25,50,75,100$ in \autoref{tab:complete-results}. Across all $K$, DSL consistently improves assignment accuracy, while the strongest backbone depends on the metric: ECRTM + DSL is strongest for $C_V$, ProdLDA + DSL is strongest for LLM rating, and FASTopic + DSL preserves near-perfect I-RBO.
+% =========================
+% Complete per-K results table
+% Requires: booktabs, adjustbox, subcaption, xcolor, makecell
+% Assumes these are already defined:
+%   \best{...}, \dataset{...}, \metric{...}, \model{...}, \sectionrow{...}
+% =========================
+
+\providecommand{\best}[1]{#1}
+\renewcommand{\best}[1]{#1}
+
+\newcommand{\completeResultsHeader}{%
+\toprule
+& \dataset{20NewsGroup}
+& \dataset{TweetTopic}
+& \dataset{StackOverflow} \\
+\cmidrule(lr){2-5}
+\cmidrule(lr){6-9}
+\cmidrule(lr){10-13}
+\textbf{Method}
+& \metric{$C_V$} & \metric{LLM} & \metric{I--RBO} & \metric{Purity}
+& \metric{$C_V$} & \metric{LLM} & \metric{I--RBO} & \metric{Purity}
+& \metric{$C_V$} & \metric{LLM} & \metric{I--RBO} & \metric{Purity} \\
+}
+
+\newcommand{\completeResultsTabularBegin}{%
+\begin{adjustbox}{max width=.95\textwidth, max totalheight=.88\textheight, keepaspectratio}
+\begin{tabular}{
+@{}l
+@{\hspace{4.5pt}}c@{\hspace{1.6pt}}c@{\hspace{1.6pt}}c@{\hspace{1.6pt}}c
+@{\hspace{8pt}}c@{\hspace{1.6pt}}c@{\hspace{1.6pt}}c@{\hspace{1.6pt}}c
+@{\hspace{8pt}}c@{\hspace{1.6pt}}c@{\hspace{1.6pt}}c@{\hspace{1.6pt}}c
+@{}
+}
+}
+
+\newcommand{\completeResultsTabularEnd}{%
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+}
+
+\begin{table*}[p]
+\centering
+\scriptsize
+\setlength{\tabcolsep}{0pt}
+\renewcommand{\arraystretch}{0.92}
+\caption{
+Automatic evaluation results on the top-15 words for each number of topics ($K=25,50,75,100$), with five random seeds per $K$.
+Results not statistically significantly different from the best method ($p \ge 0.05$) under Welch's $t$-test are highlighted in blue.
+Rows without a suffix use the ProdLDA backbone with our proposed method; rows suffixed with \model{+ ECRTM} or \model{+ FASTopic} use the ECRTM or FASTopic backbone.
+}
+\label{tab:complete-results}
+
+\begin{subtable}{\textwidth}
+\centering
+\caption{$K = 25$}
+\label{tab:complete-results-k25}
+\completeResultsTabularBegin
+\completeResultsHeader
+
+\sectionrow{Baselines}
+
+LDA
+& .336 & 2.30 & .953 & .296
+& .350 & 1.99 & .984 & .416
+& .331 & 2.04 & .998 & .142 \\
+
+ProdLDA
+& .355 & 2.58 & .991 & .335
+& .362 & 2.18 & .996 & .509
+& .350 & 2.60 & .997 & .238 \\
+
+ZeroshotTM
+& .354 & 2.54 & .993 & .358
+& .361 & 2.42 & .995 & .552
+& .362 & 2.80 & .997 & .281 \\
+
+CombinedTM
+& .357 & 2.64 & .993 & .353
+& .364 & 2.43 & .992 & .564
+& .366 & 2.86 & .996 & .279 \\
+
+ETM
+& .339 & 2.43 & .942 & .335
+& .348 & 2.30 & .949 & .555
+& .350 & 2.35 & .946 & .160 \\
+
+BERTopic
+& .361 & 2.43 & .988 & .207
+& .355 & 2.19 & .996 & .479
+& .376 & 2.71 & .994 & .130 \\
+
+ECRTM
+& .383 & 2.45 & \best{.999} & .335
+& .357 & 1.72 & \best{1.000} & .409
+& .367 & 1.93 & \best{1.000} & .066 \\
+
+FASTopic
+& .371 & 2.65 & \best{1.000} & .386
+& .260 & 2.07 & .525 & .529
+& .363 & 2.64 & .694 & .138 \\
+
+\sectionrow{ProdLDA + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& \best{.395} & 2.88 & .995 & .502
+& \best{.399} & \best{2.93} & .992 & \best{.768}
+& \best{.402} & \best{2.94} & .992 & \best{.730} \\
+
+\model{Llama-3.1-8B}
+& .376 & \best{2.94} & .995 & \best{.525}
+& \best{.392} & \best{2.91} & .995 & .754
+& \best{.399} & \best{2.97} & .995 & .659 \\
+
+\model{Llama-3.2-1B}
+& \best{.389} & \best{2.91} & .995 & \best{.543}
+& \best{.393} & \best{2.94} & .995 & \best{.770}
+& \best{.403} & \best{2.95} & .995 & .678 \\
+
+\model{Qwen-3.5-0.8B}
+& .407 & 2.90 & .986 & .520
+& .411 & 2.88 & .979 & .773
+& .413 & 2.94 & .989 & .779 \\
+
+\model{Phi-3-mini}
+& .379 & 2.74 & .998 & .536
+& .390 & 2.69 & .998 & .767
+& .409 & 2.86 & .992 & .790 \\
+
+\sectionrow{ECRTM + DSL}
+
+\model{ERNIE-4.5-0.3B + ECRTM}
+& .416 & 2.79 & .987 & .487
+& .409 & 2.82 & .984 & .749
+& .413 & 2.78 & .993 & .672 \\
+
+\model{Llama-3.1-8B + ECRTM}
+& .398 & 2.80 & .988 & .540
+& .392 & 2.75 & .984 & .744
+& .396 & 2.98 & .994 & .624 \\
+
+\model{Llama-3.2-1B + ECRTM}
+& .409 & 2.85 & .988 & .567
+& .398 & 2.78 & .985 & .764
+& .401 & 2.90 & .994 & .625 \\
+
+\model{Qwen-3.5-0.8B + ECRTM}
+& .422 & 2.82 & .986 & .547
+& .408 & 2.83 & .983 & .756
+& .405 & 2.90 & .992 & .794 \\
+
+\model{Phi-3-mini + ECRTM}
+& .380 & 2.74 & .987 & .519
+& .388 & 2.75 & .984 & .749
+& .402 & 2.90 & .989 & .739 \\
+
+\sectionrow{FASTopic + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& .361 & 2.42 & 1.000 & .483
+& .365 & 2.26 & 1.000 & .683
+& .395 & 2.61 & 1.000 & .493 \\
+
+\model{Llama-3.1-8B}
+& .370 & 2.24 & 1.000 & .519
+& .367 & 2.17 & 1.000 & .691
+& .417 & 2.45 & 1.000 & .521 \\
+
+\model{Llama-3.2-1B}
+& .342 & 2.42 & 1.000 & .515
+& .359 & 2.20 & 1.000 & .694
+& .418 & 2.53 & 1.000 & .522 \\
+
+\model{Qwen-3.5-0.8B}
+& .369 & 2.42 & 1.000 & .474
+& .366 & 2.10 & 1.000 & .688
+& .404 & 2.66 & 1.000 & .522 \\
+
+\model{Phi-3-mini}
+& .349 & 2.19 & 1.000 & .460
+& .360 & 2.14 & 1.000 & .689
+& .429 & 2.60 & 1.000 & .524 \\
+
+\completeResultsTabularEnd
+\end{subtable}
+\end{table*}
+
+\begin{table*}[p]
+\ContinuedFloat
+\centering
+\scriptsize
+\setlength{\tabcolsep}{0pt}
+\renewcommand{\arraystretch}{0.92}
+\caption[]{Automatic evaluation results on the top-15 words for each number of topics, continued.}
+
+\begin{subtable}{\textwidth}
+\centering
+\caption{$K = 50$}
+\label{tab:complete-results-k50}
+\completeResultsTabularBegin
+\completeResultsHeader
+
+\sectionrow{Baselines}
+
+LDA
+& .346 & 2.24 & .977 & .299
+& .353 & 1.94 & .993 & .425
+& .346 & 2.00 & .999 & .167 \\
+
+ProdLDA
+& .348 & 2.52 & .993 & .357
+& .352 & 2.14 & .994 & .532
+& .350 & 2.64 & .993 & .266 \\
+
+ZeroshotTM
+& .357 & 2.58 & .994 & .401
+& .351 & 2.31 & .994 & .575
+& .365 & 2.86 & .993 & .308 \\
+
+CombinedTM
+& .349 & 2.58 & .995 & .389
+& .356 & 2.36 & .990 & .590
+& .364 & 2.84 & .987 & .309 \\
+
+ETM
+& .343 & 2.35 & .930 & .367
+& .354 & 2.20 & .930 & .554
+& .349 & 2.30 & .927 & .155 \\
+
+BERTopic
+& .359 & 2.51 & .992 & .324
+& .370 & 2.20 & .996 & .579
+& .375 & 2.69 & .996 & .203 \\
+
+ECRTM
+& .363 & 2.32 & .998 & .378
+& .359 & 1.86 & \best{1.000} & .406
+& .377 & 1.93 & \best{1.000} & .070 \\
+
+FASTopic
+& .357 & 2.58 & \best{.999} & .424
+& .269 & 2.00 & .625 & .557
+& .358 & 2.25 & .691 & .166 \\
+
+\sectionrow{ProdLDA + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& \best{.379} & \best{2.84} & .990 & .513
+& \best{.388} & \best{2.88} & .989 & \best{.779}
+& \best{.395} & 2.90 & .986 & \best{.732} \\
+
+\model{Llama-3.1-8B}
+& .365 & \best{2.88} & .993 & \best{.556}
+& \best{.384} & 2.86 & .992 & \best{.773}
+& .382 & \best{2.95} & .991 & .704 \\
+
+\model{Llama-3.2-1B}
+& \best{.380} & \best{2.90} & .991 & \best{.560}
+& \best{.387} & \best{2.91} & .992 & \best{.779}
+& \best{.394} & \best{2.94} & .991 & .701 \\
+
+\model{Qwen-3.5-0.8B}
+& .403 & 2.85 & .980 & .541
+& .398 & 2.89 & .978 & .788
+& .403 & 2.88 & .981 & .789 \\
+
+\model{Phi-3-mini}
+& .371 & 2.72 & .994 & .558
+& .385 & 2.65 & .995 & .786
+& .402 & 2.87 & .988 & .802 \\
+
+\sectionrow{ECRTM + DSL}
+
+\model{ERNIE-4.5-0.3B + ECRTM}
+& .407 & 2.86 & .983 & .508
+& .398 & 2.81 & .982 & .757
+& .414 & 2.91 & .987 & .750 \\
+
+\model{Llama-3.1-8B + ECRTM}
+& .390 & 2.87 & .986 & .567
+& .388 & 2.82 & .984 & .758
+& .391 & 2.95 & .991 & .740 \\
+
+\model{Llama-3.2-1B + ECRTM}
+& .408 & 2.86 & .980 & .572
+& .398 & 2.85 & .983 & .771
+& .398 & 2.94 & .992 & .719 \\
+
+\model{Qwen-3.5-0.8B + ECRTM}
+& .428 & 2.86 & .972 & .551
+& .406 & 2.82 & .976 & .779
+& .403 & 2.89 & .985 & .789 \\
+
+\model{Phi-3-mini + ECRTM}
+& .378 & 2.80 & .988 & .529
+& .382 & 2.74 & .986 & .774
+& .408 & 2.94 & .988 & .793 \\
+
+\sectionrow{FASTopic + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& .343 & 2.28 & 1.000 & .507
+& .359 & 2.10 & 1.000 & .703
+& .388 & 2.27 & 1.000 & .506 \\
+
+\model{Llama-3.1-8B}
+& .352 & 2.08 & 1.000 & .547
+& .353 & 2.02 & 1.000 & .702
+& .400 & 2.33 & 1.000 & .532 \\
+
+\model{Llama-3.2-1B}
+& .336 & 2.20 & 1.000 & .536
+& .357 & 2.05 & 1.000 & .699
+& .392 & 2.35 & 1.000 & .528 \\
+
+\model{Qwen-3.5-0.8B}
+& .345 & 2.17 & 1.000 & .501
+& .362 & 2.00 & 1.000 & .693
+& .393 & 2.28 & 1.000 & .537 \\
+
+\model{Phi-3-mini}
+& .333 & 2.01 & 1.000 & .499
+& .354 & 1.94 & 1.000 & .705
+& .392 & 2.28 & 1.000 & .536 \\
+
+\completeResultsTabularEnd
+\end{subtable}
+\end{table*}
+
+\begin{table*}[p]
+\ContinuedFloat
+\centering
+\scriptsize
+\setlength{\tabcolsep}{0pt}
+\renewcommand{\arraystretch}{0.92}
+\caption[]{Automatic evaluation results on the top-15 words for each number of topics, continued.}
+
+\begin{subtable}{\textwidth}
+\centering
+\caption{$K = 75$}
+\label{tab:complete-results-k75}
+\completeResultsTabularBegin
+\completeResultsHeader
+
+\sectionrow{Baselines}
+
+LDA
+& .341 & 2.19 & .988 & .303
+& .350 & 1.95 & .995 & .453
+& .354 & 2.05 & .994 & .194 \\
+
+ProdLDA
+& .351 & 2.46 & .992 & .360
+& .355 & 2.09 & .993 & .540
+& .355 & 2.63 & .989 & .277 \\
+
+ZeroshotTM
+& .351 & 2.53 & .994 & .412
+& .355 & 2.25 & .993 & .575
+& .363 & 2.87 & .991 & .316 \\
+
+CombinedTM
+& .348 & 2.53 & .992 & .407
+& .361 & 2.31 & .987 & .597
+& .362 & 2.86 & .983 & .315 \\
+
+ETM
+& .346 & 2.31 & .930 & .377
+& .351 & 2.20 & .932 & .548
+& .349 & 2.23 & .930 & .148 \\
+
+BERTopic
+& .359 & 2.48 & .993 & .425
+& .367 & 2.20 & .996 & .589
+& .375 & 2.59 & .996 & .223 \\
+
+ECRTM
+& .353 & 2.25 & \best{.998} & .377
+& .354 & 1.89 & \best{1.000} & .397
+& .375 & 1.95 & \best{1.000} & .056 \\
+
+FASTopic
+& .353 & 2.55 & \best{.999} & .425
+& .283 & 1.94 & .675 & .570
+& .367 & 2.20 & .684 & .180 \\
+
+\sectionrow{ProdLDA + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& \best{.377} & \best{2.86} & .990 & .528
+& \best{.391} & 2.88 & .988 & \best{.789}
+& \best{.395} & 2.91 & .983 & \best{.742} \\
+
+\model{Llama-3.1-8B}
+& .360 & \best{2.85} & .992 & \best{.574}
+& .381 & 2.87 & .992 & .781
+& .383 & \best{2.95} & .990 & .717 \\
+
+\model{Llama-3.2-1B}
+& .370 & \best{2.89} & .990 & \best{.572}
+& .385 & \best{2.92} & .991 & \best{.788}
+& \best{.393} & \best{2.94} & .990 & .711 \\
+
+\model{Qwen-3.5-0.8B}
+& .395 & 2.84 & .977 & .551
+& .398 & 2.85 & .975 & .780
+& .401 & 2.87 & .981 & .790 \\
+
+\model{Phi-3-mini}
+& .367 & 2.69 & .993 & .563
+& .383 & 2.58 & .993 & .793
+& .402 & 2.88 & .987 & .808 \\
+
+\sectionrow{ECRTM + DSL}
+
+\model{ERNIE-4.5-0.3B + ECRTM}
+& .400 & 2.80 & .985 & .536
+& .395 & 2.86 & .982 & .778
+& .410 & 2.86 & .986 & .762 \\
+
+\model{Llama-3.1-8B + ECRTM}
+& .385 & 2.83 & .986 & .560
+& .383 & 2.85 & .985 & .768
+& .395 & 2.94 & .990 & .754 \\
+
+\model{Llama-3.2-1B + ECRTM}
+& .399 & 2.84 & .981 & .590
+& .387 & 2.82 & .984 & .783
+& .393 & 2.94 & .991 & .738 \\
+
+\model{Qwen-3.5-0.8B + ECRTM}
+& .425 & 2.82 & .970 & .568
+& .408 & 2.81 & .974 & .795
+& .405 & 2.83 & .980 & .815 \\
+
+\model{Phi-3-mini + ECRTM}
+& .374 & 2.80 & .990 & .542
+& .382 & 2.71 & .988 & .789
+& .408 & 2.93 & .988 & .815 \\
+
+\sectionrow{FASTopic + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& .337 & 2.17 & 1.000 & .522
+& .359 & 1.95 & 1.000 & .706
+& .378 & 2.14 & 1.000 & .517 \\
+
+\model{Llama-3.1-8B}
+& .336 & 1.99 & 1.000 & .565
+& .351 & 1.93 & 1.000 & .707
+& .386 & 2.21 & 1.000 & .541 \\
+
+\model{Llama-3.2-1B}
+& .334 & 2.11 & 1.000 & .552
+& .355 & 1.97 & 1.000 & .704
+& .377 & 2.20 & 1.000 & .535 \\
+
+\model{Qwen-3.5-0.8B}
+& .340 & 2.02 & 1.000 & .516
+& .358 & 1.93 & 1.000 & .700
+& .383 & 2.15 & 1.000 & .545 \\
+
+\model{Phi-3-mini}
+& .333 & 1.98 & 1.000 & .510
+& .350 & 1.91 & 1.000 & .711
+& .384 & 2.20 & 1.000 & .542 \\
+
+\completeResultsTabularEnd
+\end{subtable}
+\end{table*}
+
+\begin{table*}[p]
+\ContinuedFloat
+\centering
+\scriptsize
+\setlength{\tabcolsep}{0pt}
+\renewcommand{\arraystretch}{0.92}
+\caption[]{Automatic evaluation results on the top-15 words for each number of topics, continued.}
+
+\begin{subtable}{\textwidth}
+\centering
+\caption{$K = 100$}
+\label{tab:complete-results-k100}
+\completeResultsTabularBegin
+\completeResultsHeader
+
+\sectionrow{Baselines}
+
+LDA
+& .342 & 2.15 & .991 & .308
+& .348 & 1.92 & .995 & .470
+& .386 & 1.93 & .915 & .192 \\
+
+ProdLDA
+& .349 & 2.39 & .992 & .373
+& .352 & 2.05 & .992 & .552
+& .353 & 2.60 & .986 & .279 \\
+
+ZeroshotTM
+& .352 & 2.48 & .993 & .417
+& .358 & 2.23 & .993 & .589
+& .363 & 2.84 & .989 & .324 \\
+
+CombinedTM
+& .351 & 2.51 & .993 & .415
+& .357 & 2.35 & .983 & .599
+& .363 & 2.85 & .979 & .320 \\
+
+ETM
+& .347 & 2.29 & .933 & .361
+& .351 & 2.20 & .931 & .548
+& .345 & 2.26 & .933 & .141 \\
+
+BERTopic
+& .359 & 2.48 & .993 & .454
+& .364 & 2.19 & .996 & .601
+& .370 & 2.53 & .997 & .252 \\
+
+ECRTM
+& .343 & 2.11 & \best{1.000} & .364
+& .355 & 1.95 & \best{1.000} & .382
+& .371 & 1.98 & \best{1.000} & .055 \\
+
+FASTopic
+& .350 & 2.58 & .998 & .431
+& .293 & 1.81 & .679 & .571
+& .365 & 2.13 & .678 & .199 \\
+
+\sectionrow{ProdLDA + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& \best{.373} & \best{2.86} & .989 & .536
+& \best{.389} & 2.89 & .987 & .789
+& \best{.395} & 2.90 & .984 & \best{.743} \\
+
+\model{Llama-3.1-8B}
+& .355 & 2.84 & .992 & \best{.580}
+& .377 & 2.87 & .991 & .786
+& .382 & \best{2.96} & .989 & .720 \\
+
+\model{Llama-3.2-1B}
+& .367 & \best{2.87} & .989 & \best{.581}
+& .382 & \best{2.92} & .990 & \best{.797}
+& .388 & \best{2.96} & .990 & .702 \\
+
+\model{Qwen-3.5-0.8B}
+& .391 & 2.84 & .976 & .555
+& .397 & 2.81 & .974 & .784
+& .397 & 2.86 & .979 & .795 \\
+
+\model{Phi-3-mini}
+& .362 & 2.66 & .993 & .572
+& .384 & 2.59 & .992 & .802
+& .405 & 2.83 & .986 & .811 \\
+
+\sectionrow{ECRTM + DSL}
+
+\model{ERNIE-4.5-0.3B + ECRTM}
+& .393 & 2.82 & .986 & .552
+& .390 & 2.80 & .984 & .786
+& .405 & 2.84 & .987 & .785 \\
+
+\model{Llama-3.1-8B + ECRTM}
+& .378 & 2.80 & .986 & .578
+& .381 & 2.86 & .986 & .789
+& .391 & 2.95 & .991 & .761 \\
+
+\model{Llama-3.2-1B + ECRTM}
+& .398 & 2.81 & .979 & .599
+& .388 & 2.80 & .985 & .791
+& .395 & 2.89 & .991 & .751 \\
+
+\model{Qwen-3.5-0.8B + ECRTM}
+& .419 & 2.80 & .970 & .578
+& .403 & 2.82 & .975 & .793
+& .410 & 2.84 & .977 & .823 \\
+
+\model{Phi-3-mini + ECRTM}
+& .368 & 2.79 & .991 & .554
+& .380 & 2.67 & .991 & .801
+& .397 & 2.90 & .989 & .827 \\
+
+\sectionrow{FASTopic + DSL}
+
+\model{ERNIE-4.5-0.3B}
+& .333 & 2.08 & 1.000 & .528
+& .355 & 1.85 & 1.000 & .715
+& .376 & 2.08 & 1.000 & .515 \\
+
+\model{Llama-3.1-8B}
+& .332 & 1.97 & 1.000 & .590
+& .351 & 1.91 & 1.000 & .732
+& .379 & 2.20 & 1.000 & .575 \\
+
+\model{Llama-3.2-1B}
+& .334 & 2.08 & 1.000 & .559
+& .355 & 1.93 & 1.000 & .714
+& .373 & 2.21 & 1.000 & .534 \\
+
+\model{Qwen-3.5-0.8B}
+& .335 & 1.97 & 1.000 & .524
+& .355 & 1.86 & 1.000 & .700
+& .377 & 2.08 & 1.000 & .543 \\
+
+\model{Phi-3-mini}
+& .330 & 1.98 & 1.000 & .526
+& .349 & 1.85 & 1.000 & .715
+& .374 & 2.15 & 1.000 & .549 \\
+
+\completeResultsTabularEnd
+\end{subtable}
+\end{table*}
+
+
+\end{document}
+
+% This document was modified from the file originally made available by
+% Pat Langley and Andrea Danyluk for ICML-2K. This version was created
+% by Iain Murray in 2018, and modified by Alexandre Bouchard in
+% 2019 and 2021 and by Csaba Szepesvari, Gang Niu and Sivan Sabato in 2022.
+% Modified again in 2023 and 2024 by Sivan Sabato and Jonathan Scarlett.
+% Previous contributors include Dan Roy, Lise Getoor and Tobias
+% Scheffer, which was slightly modified from the 2010 version by
+% Thorsten Joachims & Johannes Fuernkranz, slightly modified from the
+% 2009 version by Kiri Wagstaff and Sam Roweis's 2008 version, which is
+% slightly modified from Prasad Tadepalli's 2007 version which is a
+% lightly changed version of the previous year's version by Andrew
+% Moore, which was in turn edited from those of Kristian Kersting and
+% Codrina Lauth. Alex Smola contributed to the algorithmic style files.

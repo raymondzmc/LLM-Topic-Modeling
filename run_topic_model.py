@@ -26,9 +26,12 @@ from models.fastopic import FASTopicTrainer
 from models.topmost.ECRTM import ECRTMTrainer
 from models.topmost.data import RawDataset
 from models.ctm import GenerativeTM
+from models.generative_etm import GenerativeETM
+from models.generative_ecrtm import GenerativeECRTM
+from models.generative_fastopic import GenerativeFASTopic
 
 
-LLM_MODELS = {'generative'}
+LLM_MODELS = {'generative', 'generative_etm', 'generative_ecrtm', 'generative_fastopic'}
 BASELINE_MODELS = {'lda', 'prodlda', 'zeroshot', 'combined', 'etm', 'bertopic', 'fastopic', 'ecrtm'}
 ALL_MODELS = LLM_MODELS | BASELINE_MODELS
 
@@ -71,12 +74,95 @@ def train_model(
             lr=args.lr,
             loss_weight=args.loss_weight,
             sparsity_ratio=args.sparsity_ratio,
+            topk=args.topk,
             loss_type=args.loss_type,
             temperature=args.temperature,
             top_words=args.top_words,
         )
         model.fit(ctm_dataset)
         return model.get_info()
+    
+    elif model_name == 'generative_etm':
+        if ctm_dataset is None:
+            raise ValueError("generative_etm requires ctm_dataset")
+        idx2token = {i: w for i, w in enumerate(vocab)}
+        model = GenerativeETM(
+            vocab_size=len(vocab),
+            embedding_size=ctm_dataset.x_embeddings.shape[1],
+            num_topics=args.num_topics,
+            t_hidden_size=args.hidden_size,
+            activation=args.activation,
+            dropout=0.5,
+            lr=args.lr,
+            batch_size=args.batch_size,
+            num_epochs=args.num_epochs,
+            temperature=args.temperature,
+            loss_weight=args.loss_weight,
+            sparsity_ratio=args.sparsity_ratio,
+            loss_type=args.loss_type,
+            top_words=args.top_words,
+        )
+        model.fit(ctm_dataset)
+        info = model.get_info(idx2token=idx2token)
+        theta = model.get_theta(ctm_dataset)
+        info['topic-document-matrix'] = theta.T
+        return info
+    
+    elif model_name == 'generative_ecrtm':
+        if ctm_dataset is None:
+            raise ValueError("generative_ecrtm requires ctm_dataset")
+
+        import scipy.sparse
+        glove_path = os.path.join(local_data_path, 'glove_word_embeddings.npz')
+        if os.path.exists(glove_path):
+            pretrained_WE = scipy.sparse.load_npz(glove_path).toarray().astype('float32')
+        else:
+            from models.topmost.ECRTM.preprocess import get_word_embeddings
+            pretrained_WE_sparse = get_word_embeddings(vocab, embedding_model='glove-wiki-gigaword-200')
+            scipy.sparse.save_npz(glove_path, pretrained_WE_sparse)
+            pretrained_WE = pretrained_WE_sparse.toarray().astype('float32')
+
+        model = GenerativeECRTM(
+            vocab_size=len(vocab),
+            embedding_size=ctm_dataset.x_embeddings.shape[1],
+            num_topics=args.num_topics,
+            vocab=vocab,
+            pretrained_WE=pretrained_WE,
+            epochs=args.num_epochs,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            temperature=args.temperature,
+            loss_weight=args.loss_weight,
+            sparsity_ratio=args.sparsity_ratio,
+            loss_type=args.loss_type,
+            top_words=args.top_words,
+        )
+        model.fit(ctm_dataset)
+        info = model.get_info()
+        theta = model.get_theta(ctm_dataset)
+        info['topic-document-matrix'] = theta.T
+        return info
+    
+    elif model_name == 'generative_fastopic':
+        if ctm_dataset is None:
+            raise ValueError("generative_fastopic requires ctm_dataset")
+
+        model = GenerativeFASTopic(
+            vocab_size=len(vocab),
+            embedding_size=ctm_dataset.x_embeddings.shape[1],
+            num_topics=args.num_topics,
+            epochs=args.num_epochs,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            temperature=args.temperature,
+            top_words=args.top_words,
+            vocab=vocab,
+        )
+        model.fit(ctm_dataset)
+        info = model.get_info()
+        theta = model.get_theta(ctm_dataset)
+        info['topic-document-matrix'] = theta.T
+        return info
     
     elif model_name == 'lda':
         model = LDA(num_topics=args.num_topics, random_state=seed)
@@ -463,7 +549,20 @@ def run(args: argparse.Namespace):
             embedding_model=ablation_embedding_model,
             use_bow_target=args.ablation_use_bow_target,
         )
-    
+
+        # Report BoW sparsity statistics
+        bow_corpus = training_data.bow_corpus
+        vocab_size = len(training_data.vocab)
+        nnz_per_doc = [len(set(doc)) for doc in bow_corpus]
+        avg_nnz = sum(nnz_per_doc) / len(nnz_per_doc)
+        print(f"\n--- BoW Sparsity ---")
+        print(f"Vocab size: {vocab_size}")
+        print(f"Avg unique tokens per doc: {avg_nnz:.1f} / {vocab_size} ({100*avg_nnz/vocab_size:.1f}%)")
+        print(f"Min: {min(nnz_per_doc)}, Max: {max(nnz_per_doc)}")
+        if args.topk is not None:
+            print(f"Top-k target: {args.topk} / {vocab_size} ({100*args.topk/vocab_size:.1f}%)")
+        print(f"-------------------\n")
+
     # Load or compute vocab embeddings for evaluation
     vocab_embedding_path = os.path.join(training_data.local_path, 'vocab_embeddings.json')
     if os.path.exists(vocab_embedding_path):
@@ -497,6 +596,7 @@ def run(args: argparse.Namespace):
         wandb_config.update({
             'loss_weight': args.loss_weight,
             'sparsity_ratio': args.sparsity_ratio,
+            'topk': args.topk,
             'loss_type': args.loss_type,
             'temperature': args.temperature,
             'ablation_embedding_model': args.ablation_embedding_model,
@@ -514,7 +614,9 @@ def run(args: argparse.Namespace):
             run_name += f"_{ablation_emb_name}"
         if args.loss_type == 'CE':
             run_name += "_CE"
-        if args.sparsity_ratio != 1.0:
+        if args.topk is not None:
+            run_name += f"_topk{args.topk}"
+        elif args.sparsity_ratio != 1.0:
             run_name += f"_sparsity{args.sparsity_ratio}"
         if args.temperature != 3.0:
             run_name += f"_temp{args.temperature}"
@@ -658,6 +760,7 @@ if __name__ == '__main__':
     # Generative model arguments
     parser.add_argument('--loss_weight', type=float, default=1e3, help='Reconstruction loss weight')
     parser.add_argument('--sparsity_ratio', type=float, default=1.0, help='Sparsity ratio')
+    parser.add_argument('--topk', type=int, default=None, help='Top-k words to keep in LLM target (overrides sparsity_ratio)')
     parser.add_argument('--loss_type', type=str, default='KL', choices=['KL', 'CE'], help='Loss type')
     parser.add_argument('--temperature', type=float, default=3.0, help='Softmax temperature')
     

@@ -10,7 +10,7 @@ class ETP(nn.Module):
         sinkhorn_alpha,
         init_a_dist=None,
         init_b_dist=None,
-        OT_max_iter=5000,
+        OT_max_iter=1000,
         stop_thr=0.5e-2,
     ):
         super().__init__()

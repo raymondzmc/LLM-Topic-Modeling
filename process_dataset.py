@@ -88,18 +88,37 @@ def main(args):
             json.dump(vocab, f)
 
     # Load model
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model_name,
-        dtype=torch.bfloat16,
-        trust_remote_code=True,
-        attn_implementation="flash_attention_2",
-    ).eval()
+    model_kwargs = dict(dtype=torch.bfloat16)
+    try:
+        import flash_attn  # noqa: F401
+        model_kwargs["attn_implementation"] = "flash_attention_2"
+    except ImportError:
+        model_kwargs["attn_implementation"] = "sdpa"
+
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name, trust_remote_code=True, **model_kwargs
+        ).eval()
+    except (ImportError, Exception):
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model_name, **model_kwargs
+        ).eval()
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device)
     
     # Prepare vocab token info
     vocab_token_ids = [tokenizer.encode(f" {word}", add_special_tokens=False) for word in vocab]
-    vocab_token_prefix = [ids[0] for ids in vocab_token_ids]
+
+    # Detect SentencePiece tokenizers that prepend a dedicated space token (e.g. ▁)
+    # before every word, making all prefix IDs identical. In that case, skip the space
+    # token and use the next token as the distinguishing prefix.
+    raw_prefixes = [ids[0] for ids in vocab_token_ids]
+    if len(set(raw_prefixes)) == 1 and all(len(ids) > 1 for ids in vocab_token_ids):
+        print(f"Detected shared space-prefix token {raw_prefixes[0]}; using token at index 1 as vocab prefix.")
+        vocab_token_prefix = [ids[1] for ids in vocab_token_ids]
+    else:
+        vocab_token_prefix = raw_prefixes
+
     token_lengths = [len(token_ids) for token_ids in vocab_token_ids]
     single_token_word_idx = [i for i, token_len in enumerate(token_lengths) if token_len == 1]
     multi_token_word_idx = [i for i, token_len in enumerate(token_lengths) if token_len > 1]
@@ -165,7 +184,6 @@ def main(args):
             bow_lines = batch['bow_lines']
             batch_size = input_ids.shape[0]
             
-            # Compute the probabilities for all examples in the batch
             with torch.no_grad():
                 outputs = model(
                     input_ids,
@@ -176,7 +194,7 @@ def main(args):
             
             logits = outputs.logits
             next_token_logits = logits[:, -1, :]
-            next_words = tokenizer.batch_decode(torch.argmax(next_token_logits, dim=-1))
+            next_words = [tokenizer.decode(tid) for tid in torch.argmax(next_token_logits, dim=-1)]
             
             # Process each example in the batch
             for b_idx in range(batch_size):
@@ -186,7 +204,6 @@ def main(args):
                 example_bow = bow_lines[b_idx]
                 example_next_token_logits = next_token_logits[b_idx:b_idx+1, :]
                 
-                # Extract embeddings using helper function
                 embeddings = extract_embeddings(
                     outputs.hidden_states,
                     attention_mask,
@@ -310,7 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('--prompt_template', type=str, default="document_topic_distribution.jinja")
     parser.add_argument('--instruction_template', type=str, default="instructions/default.jinja")
     parser.add_argument('--word_prob_method', type=str, default='prefix', choices=['prefix', 'product'])
-    parser.add_argument('--hidden_state_layer', type=int, default=None, help="Hidden state layer to save (default: all)")
+    parser.add_argument('--hidden_state_layer', type=int, default=-1, help="Hidden state layer to save (-1 for last layer, None for all)")
     parser.add_argument('--embedding_method', type=str, default='last', choices=['mean', 'last'])
     parser.add_argument('--save_name', type=str, default=None)
     parser.add_argument('--batch_size', type=int, default=32)

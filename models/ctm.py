@@ -120,7 +120,7 @@ class GenerativeTM(object):
         lr=2e-3, momentum=0.99, solver='adam', num_epochs=100, num_samples=10,
         reduce_on_plateau=False, topic_prior_mean=0.0, top_words=10,
         topic_prior_variance=None, num_data_loader_workers=0, loss_weight=1.0,
-        sparsity_ratio=1.0, temperature=1.0, loss_type='KL'):
+        sparsity_ratio=1.0, topk=None, temperature=1.0, loss_type='KL'):
 
         """
         :param vocab_size: int, vocabulary size (target dimension for reconstruction)
@@ -205,6 +205,7 @@ class GenerativeTM(object):
         self.topic_prior_variance = topic_prior_variance
         self.loss_weight = loss_weight
         self.sparsity_ratio = sparsity_ratio
+        self.topk = topk
         self.temperature = temperature
         self.loss_type = loss_type
 
@@ -264,16 +265,20 @@ class GenerativeTM(object):
         KL = 0.5 * (
             var_division + diff_term - self.num_topics + logvar_det_division)
 
-        # Reconstruction term
-        k = math.ceil(self.sparsity_ratio * teacher_logits.size(1))
-        topk_indices = torch.topk(teacher_logits, k=k, dim=1)[1]
-        mask = torch.zeros_like(teacher_logits)
-        mask.scatter_(1, topk_indices, 1.0)
-        teacher_logits = teacher_logits * mask
+        # Reconstruction term: sparse top-k target with -inf masking
+        if self.topk is not None:
+            k = self.topk
+        else:
+            k = math.ceil(self.sparsity_ratio * teacher_logits.size(1))
+        topk_vals, topk_idx = torch.topk(teacher_logits, k=k, dim=1)
+        masked_logits = torch.full_like(teacher_logits, float('-inf'))
+        masked_logits.scatter_(1, topk_idx, topk_vals)
+
         if self.loss_type == 'CE':
-            RL =  -torch.sum(teacher_logits * torch.log(student_probs + 1e-10), dim=1)
+            teacher_probs = torch.softmax(masked_logits / self.temperature, dim=-1)
+            RL = -torch.sum(teacher_probs * torch.log(student_probs + 1e-10), dim=1)
         elif self.loss_type == 'KL':
-            teacher_probs = torch.softmax(teacher_logits / self.temperature, dim=-1)
+            teacher_probs = torch.softmax(masked_logits / self.temperature, dim=-1)
             teacher_probs = teacher_probs.clamp_min(1e-9)
             student_probs = student_probs.clamp_min(1e-9)
             RL = torch.sum(teacher_probs * torch.log(teacher_probs / student_probs), dim=1)
